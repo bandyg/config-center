@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>批量操作</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, 'Segoe UI', sans-serif; background: #f0f2f5; color: #333; }
+  .header { background: #1a1a2e; color: #fff; padding: 16px 24px; }
+  .header h1 { font-size: 20px; }
+  .nav { display: flex; gap: 8px; padding: 12px 24px; background: #fff; border-bottom: 1px solid #e0e0e0; }
+  .nav a { text-decoration: none; color: #555; padding: 6px 14px; border-radius: 6px; font-size: 14px; }
+  .nav a:hover { background: #e8f0fe; color: #1a73e8; }
+  .nav a.active { background: #1a73e8; color: #fff; }
+  .container { max-width: 1000px; margin: 0 auto; padding: 24px; }
+  .card { background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); padding: 24px; margin-bottom: 16px; }
+  .card h3 { font-size: 16px; margin-bottom: 12px; }
+  label { display: block; font-size: 13px; color: #555; margin: 8px 0 4px; }
+  select, textarea { width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; }
+  select[multiple] { min-height: 150px; }
+  textarea { font-family: monospace; min-height: 200px; }
+  .checkbox-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; }
+  .checkbox-grid label { font-weight: normal; font-size: 13px; display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .btn { padding: 10px 24px; background: #1a73e8; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; margin-top: 12px; }
+  .btn:hover { background: #1557b0; }
+  .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .btn.danger { background: #d93025; }
+  .btn.danger:hover { background: #b3261e; }
+  .result { margin-top: 16px; }
+  .result pre { background: #f8f9fa; padding: 12px; border-radius: 6px; font-size: 12px; max-height: 400px; overflow-y: auto; }
+  .result .ok { color: #1b7a1b; }
+  .result .err { color: #c41e1e; }
+</style>
+</head>
+<body>
+<div class="header"><h1>📦 批量配置操作</h1></div>
+<div class="nav">
+  <a href="/">📋 终端列表</a>
+  <a href="/batch" class="active">📦 批量操作</a>
+  <a href="/compare">🔍 配置对比</a>
+</div>
+<div class="container">
+  <div class="card">
+    <h3>🎯 选择目标终端</h3>
+    <label>按分组选择：</label>
+    <div class="checkbox-grid">
+    {% for g in groups %}
+      <label><input type="checkbox" class="group-cb" value="{{g}}" onchange="onGroupChange()"> {{g}}</label>
+    {% endfor %}
+    </div>
+    <label>或按终端选择：</label>
+    <div class="checkbox-grid">
+    {% for t in terminals %}
+      <label><input type="checkbox" class="terminal-cb" value="{{t.ip}}" data-group="{{t.group}}"> {{t.alias}} ({{t.ip}})</label>
+    {% endfor %}
+    </div>
+    <div id="target-summary" style="margin-top:8px;font-size:13px;color:#888"></div>
+  </div>
+
+  <div class="card">
+    <h3>⚙️ 配置内容 (JSON)</h3>
+    <label>配置项：</label>
+    <select id="config-key">
+      <option value="serviceConfig">serviceConfig</option>
+      <option value="terminalFunction">terminalFunction</option>
+      <option value="supervisorConfig">supervisorConfig</option>
+      <option value="bcConfig">bcConfig</option>
+      <option value="infoConfig">infoConfig</option>
+      <option value="webConfig">webConfig</option>
+      <option value="posterConfig">posterConfig</option>
+      <option value="ctcConfig">ctcConfig</option>
+    </select>
+    <label>配置值 (JSON)：</label>
+    <textarea id="config-value" placeholder='{"demoMode": false}'></textarea>
+    <button class="btn danger" onclick="executeBatch()" id="exec-btn">🚀 推送到选中终端</button>
+  </div>
+
+  <div class="card result" id="result-card" style="display:none">
+    <h3>📊 执行结果</h3>
+    <pre id="result-output"></pre>
+  </div>
+</div>
+
+<script>
+function onGroupChange() {
+  const selectedGroups = Array.from(document.querySelectorAll('.group-cb:checked')).map(cb => cb.value);
+  document.querySelectorAll('.terminal-cb').forEach(cb => {
+    if (selectedGroups.length === 0) {
+      cb.disabled = false;
+    } else {
+      cb.disabled = selectedGroups.includes(cb.dataset.group);
+    }
+  });
+  updateSummary();
+}
+
+function updateSummary() {
+  const ips = Array.from(document.querySelectorAll('.terminal-cb:checked')).map(cb => cb.value);
+  const groups = Array.from(document.querySelectorAll('.group-cb:checked')).map(cb => cb.value);
+  const total = ips.length + (groups.length > 0 ? ' (含分组)' : '');
+  document.getElementById('target-summary').textContent = `已选 ${ips.length} 台终端` + (groups.length ? ` + ${groups.length} 个分组` : '');
+}
+
+document.querySelectorAll('.terminal-cb').forEach(cb => cb.addEventListener('change', updateSummary));
+
+async function executeBatch() {
+  const ips = Array.from(document.querySelectorAll('.terminal-cb:checked')).map(cb => cb.value);
+  const groups = Array.from(document.querySelectorAll('.group-cb:checked')).map(cb => cb.value);
+  const key = document.getElementById('config-key').value;
+  const valueStr = document.getElementById('config-value').value;
+
+  if (ips.length === 0 && groups.length === 0) { alert('请选择至少一个终端或分组'); return; }
+  if (!valueStr) { alert('请输入配置值'); return; }
+
+  let value;
+  try { value = JSON.parse(valueStr); } catch(e) { alert('JSON 格式错误'); return; }
+
+  const btn = document.getElementById('exec-btn');
+  btn.disabled = true;
+  btn.textContent = '执行中...';
+
+  const r = await fetch('/api/batch', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ targets: { ips, groups }, configs: { [key]: value } }),
+  });
+  const data = await r.json();
+
+  const resultCard = document.getElementById('result-card');
+  resultCard.style.display = 'block';
+  const out = document.getElementById('result-output');
+  let html = `共推送 ${data.total} 台终端\n\n`;
+  for (const r of data.results) {
+    const icon = r.status === 200 ? '✅' : '❌';
+    html += `${icon} ${r.alias} (${r.ip}) / ${r.config}: ${r.status}\n`;
+  }
+  out.textContent = html;
+
+  btn.disabled = false;
+  btn.textContent = '🚀 推送到选中终端';
+}
+</script>
+</body>
+</html>

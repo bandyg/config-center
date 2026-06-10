@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kiosk 配置管理中心</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, 'Segoe UI', sans-serif; background: #f0f2f5; color: #333; }
+  .header { background: #1a1a2e; color: #fff; padding: 16px 24px; }
+  .header h1 { font-size: 20px; }
+  .header h1 small { font-size: 13px; color: #aaa; margin-left: 12px; }
+  .nav { display: flex; gap: 8px; padding: 12px 24px; background: #fff; border-bottom: 1px solid #e0e0e0; }
+  .nav a { text-decoration: none; color: #555; padding: 6px 14px; border-radius: 6px; font-size: 14px; }
+  .nav a:hover { background: #e8f0fe; color: #1a73e8; }
+  .nav a.active { background: #1a73e8; color: #fff; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+  .stats { display: flex; gap: 16px; margin-bottom: 24px; }
+  .stat-card { background: #fff; border-radius: 8px; padding: 16px 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); flex: 1; }
+  .stat-card .num { font-size: 28px; font-weight: 700; }
+  .stat-card .label { font-size: 13px; color: #888; margin-top: 4px; }
+  table { width: 100%; background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border-collapse: collapse; }
+  th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #f0f0f0; font-size: 14px; }
+  th { background: #fafafa; font-weight: 600; color: #555; }
+  tr:hover td { background: #f8f9ff; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+  .badge.online { background: #e6f7e6; color: #1b7a1b; }
+  .badge.offline { background: #ffe6e6; color: #c41e1e; }
+  .group-tag { background: #e8e8e8; padding: 2px 8px; border-radius: 4px; font-size: 12px; color: #666; }
+  .actions a { color: #1a73e8; text-decoration: none; margin-right: 8px; font-size: 13px; }
+  .actions a:hover { text-decoration: underline; }
+  .filter-bar { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; }
+  .filter-bar input, .filter-bar select { padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; }
+  .filter-bar input { flex: 1; max-width: 300px; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>🖥 Kiosk 配置管理中心 <small>Config Center v1.0</small></h1>
+</div>
+<div class="nav">
+  <a href="/" class="active">📋 终端列表</a>
+  <a href="/batch">📦 批量操作</a>
+  <a href="/compare">🔍 配置对比</a>
+</div>
+<div class="container">
+  <div class="stats" id="stats">
+    <div class="stat-card"><div class="num" id="total-count">{{terminals|length}}</div><div class="label">终端总数</div></div>
+    <div class="stat-card"><div class="num" id="online-count" style="color:#1b7a1b">-</div><div class="label">在线</div></div>
+    <div class="stat-card"><div class="num" id="group-count">{{groups|length}}</div><div class="label">分组数</div></div>
+  </div>
+
+  <div class="filter-bar">
+    <input type="text" id="search" placeholder="搜索 IP 或别名..." oninput="filterTable()">
+    <select id="groupFilter" onchange="filterTable()">
+      <option value="">全部组</option>
+      {% for g in groups %}
+      <option value="{{g}}">{{g}}</option>
+      {% endfor %}
+    </select>
+    <button onclick="refreshAll()" style="padding:8px 16px;background:#1a73e8;color:#fff;border:none;border-radius:6px;cursor:pointer">🔄 刷新</button>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>状态</th><th>别名</th><th>IP</th><th>端口</th><th>分组</th><th>配置版本</th><th>操作</th></tr>
+    </thead>
+    <tbody id="terminal-tbody">
+      {% for t in terminals %}
+      <tr data-ip="{{t.ip}}" data-group="{{t.group}}" data-alias="{{t.alias}}">
+        <td><span class="badge offline" id="status-{{t.ip}}">检测中...</span></td>
+        <td><strong>{{t.alias}}</strong></td>
+        <td><code>{{t.ip}}</code></td>
+        <td>{{t.port}}</td>
+        <td><span class="group-tag">{{t.group}}</span></td>
+        <td id="cv-{{t.ip}}">-</td>
+        <td class="actions">
+          <a href="/terminal/{{t.ip}}">查看</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+async function refreshAll() {
+  const rows = document.querySelectorAll('#terminal-tbody tr');
+  for (const row of rows) {
+    const ip = row.dataset.ip;
+    const badge = document.getElementById('status-' + ip);
+    const cv = document.getElementById('cv-' + ip);
+    badge.textContent = '检测中...';
+    badge.className = 'badge offline';
+    try {
+      const r = await fetch('/api/terminals');
+      const data = await r.json();
+      let onlineCount = 0;
+      for (const t of data) {
+        const b = document.getElementById('status-' + t.ip);
+        const c = document.getElementById('cv-' + t.ip);
+        if (t.online) {
+          b.textContent = '在线';
+          b.className = 'badge online';
+          c.textContent = t.config_version || '-';
+          onlineCount++;
+        } else {
+          b.textContent = '离线';
+          b.className = 'badge offline';
+          c.textContent = '-';
+        }
+      }
+      document.getElementById('online-count').textContent = onlineCount;
+    } catch(e) {
+      badge.textContent = '❌';
+    }
+  }
+}
+
+function filterTable() {
+  const q = document.getElementById('search').value.toLowerCase();
+  const g = document.getElementById('groupFilter').value;
+  document.querySelectorAll('#terminal-tbody tr').forEach(row => {
+    const text = (row.dataset.ip + row.dataset.alias).toLowerCase();
+    const group = row.dataset.group;
+    const match = (!q || text.includes(q)) && (!g || group === g);
+    row.style.display = match ? '' : 'none';
+  });
+}
+
+refreshAll();
+</script>
+</body>
+</html>

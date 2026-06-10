@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>配置对比</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, 'Segoe UI', sans-serif; background: #f0f2f5; color: #333; }
+  .header { background: #1a1a2e; color: #fff; padding: 16px 24px; }
+  .header h1 { font-size: 20px; }
+  .nav { display: flex; gap: 8px; padding: 12px 24px; background: #fff; border-bottom: 1px solid #e0e0e0; }
+  .nav a { text-decoration: none; color: #555; padding: 6px 14px; border-radius: 6px; font-size: 14px; }
+  .nav a:hover { background: #e8f0fe; color: #1a73e8; }
+  .nav a.active { background: #1a73e8; color: #fff; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+  .card { background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); padding: 24px; margin-bottom: 16px; }
+  .card h3 { font-size: 16px; margin-bottom: 12px; }
+  .checkbox-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; }
+  .checkbox-grid label { font-weight: normal; font-size: 13px; display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  select { padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; min-width: 200px; }
+  .btn { padding: 10px 24px; background: #1a73e8; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; margin-top: 12px; }
+  .btn:hover { background: #1557b0; }
+  table.diff { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.diff th, table.diff td { padding: 8px 12px; border: 1px solid #e0e0e0; text-align: left; vertical-align: top; }
+  table.diff th { background: #fafafa; font-weight: 600; position: sticky; top: 0; }
+  .diff-key { font-weight: 600; color: #555; white-space: nowrap; }
+  .diff-same { color: #888; }
+  .diff-different { background: #fff3e0; }
+  .diff-val { max-width: 300px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+</style>
+</head>
+<body>
+<div class="header"><h1>🔍 配置对比</h1></div>
+<div class="nav">
+  <a href="/">📋 终端列表</a>
+  <a href="/batch">📦 批量操作</a>
+  <a href="/compare" class="active">🔍 配置对比</a>
+</div>
+<div class="container">
+  <div class="card">
+    <h3>选择终端</h3>
+    <div class="checkbox-grid">
+    {% for t in terminals %}
+      <label><input type="checkbox" class="term-cb" value="{{t.ip}}"> {{t.alias}} ({{t.ip}})</label>
+    {% endfor %}
+    </div>
+    <label style="margin-top:12px">配置项：</label>
+    <select id="config-key">
+      <option value="terminalFunction">terminalFunction</option>
+      <option value="serviceConfig">serviceConfig</option>
+      <option value="supervisorConfig">supervisorConfig</option>
+      <option value="bcConfig">bcConfig</option>
+      <option value="infoConfig">infoConfig</option>
+      <option value="webConfig">webConfig</option>
+      <option value="posterConfig">posterConfig</option>
+      <option value="ctcConfig">ctcConfig</option>
+      <option value="transactionConfig">transactionConfig</option>
+    </select>
+    <button class="btn" onclick="compare()">🔍 对比</button>
+  </div>
+
+  <div id="result"></div>
+</div>
+
+<script>
+async function compare() {
+  const ips = Array.from(document.querySelectorAll('.term-cb:checked')).map(cb => cb.value);
+  if (ips.length < 2) { alert('请选择至少 2 台终端'); return; }
+  const key = document.getElementById('config-key').value;
+
+  const r = await fetch(`/api/compare?ips=${ips.join(',')}&config_key=${key}`);
+  const data = await r.json();
+
+  // 提取所有唯一键
+  const allKeys = new Set();
+  const entries = {};
+  for (const [ip, info] of Object.entries(data)) {
+    entries[ip] = { alias: info.alias, config: flatten(info.config || {}) };
+    Object.keys(entries[ip].config).forEach(k => allKeys.add(k));
+  }
+  const sortedKeys = Array.from(allKeys).sort();
+
+  let html = '<div class="card"><h3>对比结果</h3><table class="diff"><thead><tr><th>配置项</th>';
+  for (const [ip, info] of Object.entries(data)) {
+    html += `<th>${info.alias}<br><code>${ip}</code></th>`;
+  }
+  html += '</tr></thead><tbody>';
+
+  for (const key of sortedKeys) {
+    const vals = {};
+    let allSame = true;
+    let firstVal = null;
+    for (const [ip, info] of Object.entries(entries)) {
+      const v = info.config[key] !== undefined ? JSON.stringify(info.config[key]) : '—';
+      vals[ip] = v;
+      if (firstVal === null) firstVal = v;
+      else if (v !== firstVal) allSame = false;
+    }
+
+    html += `<tr class="${allSame ? '' : 'diff-different'}">`;
+    html += `<td class="diff-key">${key}</td>`;
+    for (const [ip, info] of Object.entries(entries)) {
+      html += `<td class="diff-val ${allSame ? 'diff-same' : ''}">${vals[ip]}</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table></div>';
+
+  document.getElementById('result').innerHTML = html;
+}
+
+function flatten(obj, prefix = '') {
+  let result = {};
+  for (const [key, val] of Object.entries(obj)) {
+    const k = prefix ? `${prefix}.${key}` : key;
+    if (val && typeof val === 'object' && !Array.isArray(val)) {
+      Object.assign(result, flatten(val, k));
+    } else {
+      result[k] = val;
+    }
+  }
+  return result;
+}
+</script>
+</body>
+</html>
