@@ -10,7 +10,7 @@ if getattr(sys, "frozen", False):
     # 打包为 exe 时，模板在 _MEIPASS 目录下
     BASE_DIR = Path(sys._MEIPASS)
 else:
-    BASE_DIR = Path(__file__).parent
+    BASE_DIR = Path(__file__).parent / "app"
 
 # 告诉 FastAPI 模板位置（通过环境变量或直接修改 main.py 行为）
 import os

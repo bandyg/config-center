@@ -20,7 +20,7 @@ def load_terminals() -> list[Terminal]:
     """从 YAML 加载终端列表"""
     if not TERMINALS_FILE.exists():
         return []
-    with open(TERMINALS_FILE) as f:
+    with open(TERMINALS_FILE, encoding="utf-8") as f:
         data = yaml.safe_load(f)
     terminals = []
     for t in data.get("terminals", []):

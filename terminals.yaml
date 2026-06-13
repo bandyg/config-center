@@ -2,14 +2,14 @@
 # 管理服务器通过 HTTP 代理各终端 config-serv 的 API
 
 terminals:
-  - ip: 127.0.0.1
-    alias: "本机 (bhs-4)"
+  - ip: 100.66.5.26
+    alias: "bhs-4"
     group: "管理服务器"
     port: 8081
   # - ip: 10.202.1.1
   #   alias: "分店A-01号机"
   #   group: "分店A"
-  #   port: 8081
+  #   port: 8081  
   # - ip: 10.202.1.2
   #   alias: "分店A-02号机"
   #   group: "分店A"

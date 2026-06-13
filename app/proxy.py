@@ -1,5 +1,8 @@
 """代理 httpx 请求到各终端的 config-serv"""
 
+import json
+from urllib.parse import quote
+
 import httpx
 from typing import Optional
 
@@ -37,12 +40,13 @@ async def fetch_config(ip: str, port: int = 8081, config_key: Optional[str] = No
 
 
 async def write_config(ip: str, port: int, config_key: str, data: dict) -> dict:
-    """写入终端配置"""
-    url = f"http://{ip}:{port}/api/terminalConfig/set/{config_key}"
+    """写入终端配置 (config-serv 的 set API 把 JSON 值放在 URL 路径中)"""
+    encoded_val = quote(json.dumps(data), safe="")
+    url = f"http://{ip}:{port}/api/terminalConfig/set/{config_key}/{encoded_val}"
 
     async with httpx.AsyncClient(timeout=TIMEOUT) as client:
         try:
-            r = await client.put(url, json=data)
+            r = await client.put(url)
             return {"status": r.status_code, "text": r.text}
         except httpx.ConnectError:
             return {"error": "Connection refused"}

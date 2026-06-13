@@ -1,61 +1,210 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{terminal.alias}} — 配置详情</title>
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, 'Segoe UI', sans-serif; background: #f0f2f5; color: #333; }
-  .header { background: #1a1a2e; color: #fff; padding: 16px 24px; display: flex; align-items: center; gap: 12px; }
-  .header h1 { font-size: 18px; }
-  .header a { color: #aaa; text-decoration: none; font-size: 14px; }
-  .header a:hover { color: #fff; }
-  .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
-  .info-bar { background: #fff; border-radius: 8px; padding: 16px 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 20px; display: flex; gap: 24px; align-items: center; flex-wrap: wrap; }
-  .info-bar .label { font-size: 12px; color: #888; }
-  .info-bar .value { font-size: 14px; font-weight: 600; }
-  .badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
-  .badge.online { background: #e6f7e6; color: #1b7a1b; }
-  .badge.offline { background: #ffe6e6; color: #c41e1e; }
-  .config-section { background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 16px; overflow: hidden; }
-  .config-header { background: #fafafa; padding: 12px 20px; font-weight: 600; font-size: 14px; border-bottom: 1px solid #f0f0f0; cursor: pointer; display: flex; justify-content: space-between; }
-  .config-header:hover { background: #f0f4ff; }
-  .config-body { padding: 16px 20px; display: block; }
-  .config-body.hidden { display: none; }
-  pre { background: #f8f9fa; border-radius: 6px; padding: 16px; font-size: 13px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
-  .edit-form { margin-top: 12px; }
-  .edit-form textarea { width: 100%; min-height: 120px; font-family: monospace; font-size: 13px; padding: 8px; border: 1px solid #ddd; border-radius: 6px; }
-  .edit-form button { padding: 8px 20px; background: #1a73e8; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; margin-top: 8px; }
-  .edit-form button:hover { background: #1557b0; }
-  .edit-form .msg { font-size: 13px; margin-top: 8px; }
-  .arrow { transition: transform 0.2s; }
-  .arrow.open { transform: rotate(90deg); }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{terminal.alias}} — 配置详情</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, 'Segoe UI', sans-serif;
+      background: #f0f2f5;
+      color: #333;
+    }
+
+    .header {
+      background: #1a1a2e;
+      color: #fff;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .header h1 {
+      font-size: 18px;
+    }
+
+    .header a {
+      color: #aaa;
+      text-decoration: none;
+      font-size: 14px;
+    }
+
+    .header a:hover {
+      color: #fff;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .info-bar {
+      background: #fff;
+      border-radius: 8px;
+      padding: 16px 24px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+      margin-bottom: 20px;
+      display: flex;
+      gap: 24px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .info-bar .label {
+      font-size: 12px;
+      color: #888;
+    }
+
+    .info-bar .value {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .badge.online {
+      background: #e6f7e6;
+      color: #1b7a1b;
+    }
+
+    .badge.offline {
+      background: #ffe6e6;
+      color: #c41e1e;
+    }
+
+    .config-section {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+
+    .config-header {
+      background: #fafafa;
+      padding: 12px 20px;
+      font-weight: 600;
+      font-size: 14px;
+      border-bottom: 1px solid #f0f0f0;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .config-header:hover {
+      background: #f0f4ff;
+    }
+
+    .config-body {
+      padding: 16px 20px;
+      display: block;
+    }
+
+    .config-body.hidden {
+      display: none;
+    }
+
+    pre {
+      background: #f8f9fa;
+      border-radius: 6px;
+      padding: 16px;
+      font-size: 13px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .edit-form {
+      margin-top: 12px;
+    }
+
+    .edit-form textarea {
+      width: 100%;
+      min-height: 120px;
+      font-family: monospace;
+      font-size: 13px;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+    }
+
+    .edit-form button {
+      padding: 8px 20px;
+      background: #1a73e8;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      margin-top: 8px;
+    }
+
+    .edit-form button:hover {
+      background: #1557b0;
+    }
+
+    .edit-form .msg {
+      font-size: 13px;
+      margin-top: 8px;
+    }
+
+    .arrow {
+      transition: transform 0.2s;
+    }
+
+    .arrow.open {
+      transform: rotate(90deg);
+    }
+  </style>
 </head>
+
 <body>
-<div class="header">
-  <a href="/">← 返回</a>
-  <h1>{{terminal.alias}}</h1>
-</div>
-<div class="container">
-  <div class="info-bar">
-    <div><div class="label">IP</div><div class="value"><code>{{terminal.ip}}</code></div></div>
-    <div><div class="label">端口</div><div class="value">{{terminal.port}}</div></div>
-    <div><div class="label">分组</div><div class="value">{{terminal.group}}</div></div>
-    <div>
-      <div class="label">状态</div>
-      <div class="value">
-        {% if online %}
-        <span class="badge online">在线</span>
-        {% else %}
-        <span class="badge offline">离线</span>
-        {% endif %}
+  <div class="header">
+    <a href="/">← 返回</a>
+    <h1>{{terminal.alias}}</h1>
+  </div>
+  <div class="container">
+    <div class="info-bar">
+      <div>
+        <div class="label">IP</div>
+        <div class="value"><code>{{terminal.ip}}</code></div>
+      </div>
+      <div>
+        <div class="label">端口</div>
+        <div class="value">{{terminal.port}}</div>
+      </div>
+      <div>
+        <div class="label">分组</div>
+        <div class="value">{{terminal.group}}</div>
+      </div>
+      <div>
+        <div class="label">状态</div>
+        <div class="value">
+          {% if online %}
+          <span class="badge online">在线</span>
+          {% else %}
+          <span class="badge offline">离线</span>
+          {% endif %}
+        </div>
       </div>
     </div>
-  </div>
 
-  {% if online %}
+    {% if online %}
     {% for key, val in configs.items() %}
     <div class="config-section">
       <div class="config-header" onclick="toggle('{{key}}')">
@@ -63,7 +212,6 @@
         <span class="arrow" id="arrow-{{key}}">▶</span>
       </div>
       <div class="config-body" id="body-{{key}}">
-        <pre id="pre-{{key}}">{{ val | tojson(indent=2) }}</pre>
         <div class="edit-form">
           <textarea id="edit-{{key}}">{{ val | tojson(indent=2) }}</textarea>
           <button onclick="saveConfig('{{terminal.ip}}', '{{key}}')">💾 保存</button>
@@ -72,40 +220,39 @@
       </div>
     </div>
     {% endfor %}
-  {% else %}
+    {% else %}
     <p style="text-align:center;color:#888;padding:40px">终端离线，无法获取配置</p>
-  {% endif %}
-</div>
+    {% endif %}
+  </div>
 
-<script>
-function toggle(key) {
-  const body = document.getElementById('body-' + key);
-  const arrow = document.getElementById('arrow-' + key);
-  body.classList.toggle('hidden');
-  arrow.classList.toggle('open');
-}
+  <script>
+    function toggle(key) {
+      const body = document.getElementById('body-' + key);
+      const arrow = document.getElementById('arrow-' + key);
+      body.classList.toggle('hidden');
+      arrow.classList.toggle('open');
+    }
 
-async function saveConfig(ip, key) {
-  const textarea = document.getElementById('edit-' + key);
-  const msg = document.getElementById('msg-' + key);
-  msg.textContent = '保存中...';
-  msg.style.color = '#888';
-  try {
-    const val = JSON.parse(textarea.value);
-    const r = await fetch(`/api/proxy/${ip}/config/${key}`, {
-      method: 'PUT',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(val),
-    });
-    const data = await r.json();
-    document.getElementById('pre-' + key).textContent = JSON.stringify(val, null, 2);
-    msg.textContent = '✅ 保存成功';
-    msg.style.color = '#1b7a1b';
-  } catch(e) {
-    msg.textContent = '❌ ' + e.message;
-    msg.style.color = '#c41e1e';
-  }
-}
-</script>
+    async function saveConfig(ip, key) {
+      const textarea = document.getElementById('edit-' + key);
+      const msg = document.getElementById('msg-' + key);
+      msg.textContent = '保存中...';
+      msg.style.color = '#888';
+      try {
+        const val = JSON.parse(textarea.value);
+        const r = await fetch(`/api/proxy/${ip}/config/${key}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(val),
+        });
+        msg.textContent = '✅ 保存成功';
+        msg.style.color = '#1b7a1b';
+      } catch (e) {
+        msg.textContent = '❌ ' + e.message;
+        msg.style.color = '#c41e1e';
+      }
+    }
+  </script>
 </body>
+
 </html>
