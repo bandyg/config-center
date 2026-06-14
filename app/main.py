@@ -6,23 +6,35 @@ from pathlib import Path
 # 确保能找到 app 包（PyInstaller 打包兼容）
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.terminals import load_terminals, get_terminal_groups, Terminal
+from app.terminals import load_terminals, save_terminals, get_terminal_groups, Terminal
 from app.proxy import check_online, fetch_all_configs, fetch_config, write_config
+from app.history import record_config_change, get_config_history, rollback_config
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
+from fastapi import Query
 import httpx
 import json
+import re
+import socket
+import struct
+import asyncio
+from typing import List, Optional
 from dataclasses import asdict
 
 app = FastAPI(title="Kiosk Config Center", version="1.0.0")
 
-# Jinja2 模板（兼容 PyInstaller 打包路径）
+# Jinja2 模板 + 静态文件（兼容 PyInstaller 打包路径）
 import os
 _base_dir = Path(os.environ.get("KIOSK_CONFIG_BASE_DIR", str(Path(__file__).parent)))
 templates_dir = _base_dir / "templates"
 templates = Jinja2Templates(directory=str(templates_dir))
+
+static_dir = _base_dir / "static"
+if static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 
 # ─── API ─────────────────────────────────────────────
@@ -51,6 +63,163 @@ async def api_terminals():
     return result
 
 
+@app.post("/api/terminals/add")
+async def api_terminals_add(request: Request):
+    """添加新的终端（校验 IP 有效性 → 检测在线 → 写入 YAML）"""
+    import traceback
+    try:
+        body = await request.json()
+        ip = body.get("ip", "").strip()
+        alias = body.get("alias", "").strip() or ip
+        group = body.get("group", "").strip() or "default"
+        port = int(body.get("port", 8081))
+
+        # IP 格式校验
+        ip_pattern = r"^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$"
+        m = re.match(ip_pattern, ip)
+        if not m:
+            return {"status": "error", "error": "IP 地址格式不合法"}
+        for octet in m.groups():
+            if int(octet) > 255:
+                return {"status": "error", "error": f"IP 段不能超过 255: {octet}"}
+
+        # 查重
+        terminals_list = load_terminals()
+        if any(t.ip == ip for t in terminals_list):
+            return {"status": "error", "error": "该 IP 已在终端列表中"}
+
+        # 检测连通性
+        try:
+            online = await check_online(ip, port)
+        except Exception:
+            online = False
+
+        # 添加到列表
+        new_terminal = Terminal(ip=ip, alias=alias, group=group, port=port)
+        terminals_list.append(new_terminal)
+        save_terminals(terminals_list)
+
+        return {
+            "status": "ok",
+            "terminal": {"ip": ip, "alias": alias, "group": group, "port": port, "online": online},
+        }
+    except Exception as e:
+        traceback.print_exc()
+        return {"status": "error", "error": f"服务异常: {type(e).__name__}: {e}"}
+
+
+# ─── 子网扫描状态 ──
+_scan_progress = {"running": False, "total": 0, "done": 0, "found": [], "error": None}
+
+
+def _cidr_to_ips(cidr: str):
+    """将 CIDR 转为 IP 列表"""
+    import ipaddress
+    net = ipaddress.ip_network(cidr, strict=False)
+    return [str(ip) for ip in net.hosts()]
+
+
+@app.post("/api/terminals/scan")
+async def api_terminals_scan(request: Request):
+    """扫描子网内开放指定端口的终端"""
+    global _scan_progress
+    body = await request.json()
+    cidr = body.get("cidr", "").strip()
+    port = int(body.get("port", 8081))
+
+    # CIDR 格式校验
+    try:
+        ips = _cidr_to_ips(cidr)
+    except Exception as e:
+        return {"status": "error", "error": f"CIDR 格式不合法: {e}"}
+
+    if not ips:
+        return {"status": "error", "error": "CIDR 未包含有效主机地址"}
+
+    # 已有终端列表（用于去重）
+    existing = set(t.ip for t in load_terminals())
+
+    _scan_progress = {"running": True, "total": len(ips), "done": 0, "found": [], "error": None}
+
+    async def scan_one(host_ip):
+        try:
+            # 尝试 TCP 连接 8081 端口
+            _, writer = await asyncio.wait_for(
+                asyncio.open_connection(host_ip, port), timeout=2
+            )
+            writer.close()
+            await writer.wait_closed()
+            # 进一步验证是否为 config-serv（GET / 看响应）
+            try:
+                async with httpx.AsyncClient(timeout=3) as client:
+                    r = await client.get(f"http://{host_ip}:{port}/")
+                    if r.status_code < 500:
+                        return host_ip
+            except Exception:
+                pass
+        except Exception:
+            pass
+        return None
+
+    async def scan_all():
+        sem = asyncio.Semaphore(50)  # 并发控制
+        async def bounded_scan(host_ip):
+            async with sem:
+                result = await scan_one(host_ip)
+                _scan_progress["done"] += 1
+                if result and result not in existing:
+                    _scan_progress["found"].append({"ip": result, "port": port, "alias": result, "group": "已发现"})
+                return result
+
+        tasks = [bounded_scan(ip) for ip in ips]
+        await asyncio.gather(*tasks)
+        _scan_progress["running"] = False
+
+    asyncio.create_task(scan_all())
+    return {
+        "status": "ok",
+        "message": f"开始扫描 {cidr}，共 {len(ips)} 个地址",
+        "total": len(ips),
+    }
+
+
+@app.get("/api/terminals/scan/progress")
+async def api_terminals_scan_progress():
+    """获取扫描进度"""
+    return _scan_progress
+
+
+@app.post("/api/terminals/scan/batch-add")
+async def api_terminals_scan_batch_add(request: Request):
+    """批量添加扫描到的主机"""
+    body = await request.json()
+    hosts = body.get("hosts", [])
+    if not hosts:
+        return {"status": "error", "error": "没有要添加的主机"}
+
+    terminals_list = load_terminals()
+    existing = set(t.ip for t in terminals_list)
+    added = []
+    skipped = []
+
+    for h in hosts:
+        ip = h.get("ip", "").strip()
+        if not ip:
+            continue
+        if ip in existing:
+            skipped.append(ip)
+            continue
+        alias = h.get("alias", "").strip() or ip
+        group = h.get("group", "").strip() or "已发现"
+        port = int(h.get("port", 8081))
+        terminals_list.append(Terminal(ip=ip, alias=alias, group=group, port=port))
+        existing.add(ip)
+        added.append({"ip": ip, "alias": alias, "group": group})
+
+    save_terminals(terminals_list)
+    return {"status": "ok", "added": added, "skipped": skipped}
+
+
 @app.get("/api/proxy/{ip}/config/{key:path}")
 async def api_proxy_config_get(ip: str, key: str, port: int = 8081):
     """代理 GET 请求到终端 config-serv 读取配置"""
@@ -67,9 +236,22 @@ async def api_proxy_config_all(ip: str, port: int = 8081):
 
 @app.put("/api/proxy/{ip}/config/{key:path}")
 async def api_proxy_config_set(ip: str, key: str, request: Request, port: int = 8081):
-    """代理 PUT 请求到终端 config-serv 写入配置"""
-    body = await request.json()
+    """代理 PUT 请求到终端 config-serv 写入配置（含历史记录）"""
+    try:
+        body = await request.json()
+    except Exception:
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=422,
+            content={"detail": "请求体不是合法的 JSON 格式", "error": "JSON parse error"},
+        )
+    # 获取旧值用于历史记录
+    old_val = await fetch_config(ip, port, key)
     result = await write_config(ip, port, key, body)
+    # 记录历史
+    terminals = load_terminals()
+    alias = next((t.alias for t in terminals if t.ip == ip), ip)
+    record_config_change(ip, alias, key, old_val, body)
     return result
 
 
@@ -94,7 +276,9 @@ async def api_batch(request: Request):
     results = []
     for t in matched:
         for key, val in configs.items():
+            old_val = await fetch_config(t.ip, t.port, key)
             r = await write_config(t.ip, t.port, key, val)
+            record_config_change(t.ip, t.alias, key, old_val, val)
             results.append({
                 "ip": t.ip,
                 "alias": t.alias,
@@ -106,30 +290,217 @@ async def api_batch(request: Request):
 
 
 @app.get("/api/compare")
-async def api_compare(ips: str = "", config_key: str = "terminalFunction"):
-    """对比多台终端的配置差异"""
-    ip_list = [ip.strip() for ip in ips.split(",") if ip.strip()]
+async def api_compare(request: Request):
+    """对比多台终端的配置差异（支持多配置项）"""
+    # 直接从 query string 解析，兼容 ?ips=a&ips=b 和 ?ips=a,b 两种形式
+    params = request.query_params
+    ip_list = []
+    for v in params.getlist("ips"):
+        for part in v.split(","):
+            p = part.strip()
+            if p and p not in ip_list:
+                ip_list.append(p)
+    key_list = []
+    for v in params.getlist("keys"):
+        for part in v.split(","):
+            p = part.strip()
+            if p and p not in key_list:
+                key_list.append(p)
+    # 默认值
+    if not key_list:
+        key_list = ["terminalFunction"]
     terminals = load_terminals()
     selected = [t for t in terminals if t.ip in ip_list]
 
+    def flatten(obj, prefix=""):
+        """将嵌套 JSON 展平为 dot-notation 键值对"""
+        items = {}
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                path = f"{prefix}.{k}" if prefix else k
+                if isinstance(v, (dict, list)):
+                    items.update(flatten(v, path))
+                else:
+                    items[path] = v
+        elif isinstance(obj, list):
+            for i, v in enumerate(obj):
+                path = f"{prefix}[{i}]"
+                if isinstance(v, (dict, list)):
+                    items.update(flatten(v, path))
+                else:
+                    items[path] = v
+        return items
+
     result = {}
-    for t in selected:
-        data = await fetch_config(t.ip, t.port, config_key)
-        result[t.ip] = {"alias": t.alias, "config": data}
+    for key in key_list:
+        result[key] = {}
+        for t in selected:
+            data = await fetch_config(t.ip, t.port, key)
+            result[key][t.ip] = {"alias": t.alias, "flattened": flatten(data)}
     return result
+
+
+# ─── 配置历史与回滚 API ──────────────────────────────
+
+
+@app.get("/api/history/{ip}/{key:path}")
+async def api_history(ip: str, key: str, limit: int = 50):
+    """获取指定终端指定配置项的修改历史"""
+    records = get_config_history(ip, key, limit=limit)
+    return {"ip": ip, "key": key, "records": records}
+
+
+@app.post("/api/rollback/{ip}/{key:path}")
+async def api_rollback(ip: str, key: str, request: Request):
+    """回滚配置到指定版本（将回滚值写入终端并记录历史）"""
+    body = await request.json()
+    target_ts = body.get("timestamp")
+    if not target_ts:
+        return {"status": "error", "error": "缺少 timestamp 参数"}
+
+    success, rollback_value, error = rollback_config(ip, key, target_ts)
+    if not success:
+        return {"status": "error", "error": error}
+
+    # 将回滚后的值实际写入终端
+    result = await write_config(ip, 8081, key, rollback_value)
+    if result.get("error"):
+        return {"status": "error", "error": f"写入终端失败: {result['error']}"}
+
+    return {"status": "ok", "rollback_value": rollback_value}
+
+
+# ─── 健康度 API ──────────────────────────────────────
+
+
+@app.get("/api/health")
+async def api_health():
+    """计算各终端健康度评分"""
+    terminals = load_terminals()
+
+    def flatten(obj, prefix=""):
+        items = {}
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                path = f"{prefix}.{k}" if prefix else k
+                if isinstance(v, (dict, list)):
+                    items.update(flatten(v, path))
+                else:
+                    items[path] = v
+        return items
+
+    results = []
+    for t in terminals:
+        online = await check_online(t.ip, t.port)
+        score = 0
+        issues = []
+        config_version = None
+        config_count = 0
+
+        if online:
+            score += 40  # 在线基础分
+            all_cfgs = await fetch_all_configs(t.ip, t.port)
+            if all_cfgs:
+                config_count = len(all_cfgs)
+                tf = all_cfgs.get("terminalFunction", {})
+                config_version = tf.get("configVersion", "unknown")
+                # 检查必需的配置项是否存在
+                required_keys = ["serviceConfig", "terminalFunction", "supervisorConfig",
+                                 "bcConfig", "infoConfig", "webConfig"]
+                for rk in required_keys:
+                    if rk not in all_cfgs:
+                        issues.append(f"缺少配置项: {rk}")
+                    else:
+                        score += 5  # 每个必需项 +5 分
+                # 版本号合理性
+                if config_version and isinstance(config_version, str):
+                    score += 10
+                # 配置完整性
+                if config_count >= 6:
+                    score += 10
+        else:
+            issues.append("终端离线")
+
+        score = min(score, 100)
+        results.append({
+            "ip": t.ip,
+            "alias": t.alias,
+            "online": online,
+            "score": score,
+            "issues": issues,
+            "config_version": config_version,
+            "config_count": config_count,
+        })
+
+    return results
 
 
 # ─── 页面 ─────────────────────────────────────────────
 
 
 @app.get("/", response_class=HTMLResponse)
-async def index(request: Request):
-    """终端列表首页"""
+async def index(request: Request, page: int = 1, page_size: int = 20):
+    """终端列表首页（SSR 直接输出在线状态，支持分页与健康度）"""
     terminals_raw = load_terminals()
     groups = get_terminal_groups(terminals_raw)
+    
+    # SSR: 并行检测所有终端在线状态
+    import asyncio
+    async def check(t):
+        online = await check_online(t.ip, t.port)
+        cv = None
+        if online:
+            tf = await fetch_config(t.ip, t.port, "terminalFunction")
+            if "configVersion" in tf:
+                cv = tf.get("configVersion")
+        return {"ip": t.ip, "online": online, "config_version": cv}
+    
+    status_results = await asyncio.gather(*[check(t) for t in terminals_raw])
+    status_map = {r["ip"]: r for r in status_results}
+    online_count = sum(1 for r in status_results if r["online"])
+    
+    # 计算健康度评分
+    health_map = {}
+    for t in terminals_raw:
+        s = status_map.get(t.ip, {})
+        online = s.get("online", False)
+        score = 0
+        issues = []
+        if not online:
+            score = 0
+            issues.append("离线")
+        else:
+            score += 60  # 在线基础分
+            cv = s.get("config_version")
+            if cv:
+                score += 20
+            if online:
+                score += 20  # 可访问加分
+            score = min(score, 100)
+        health_map[t.ip] = {"score": score, "issues": issues}
+    
+    # 分页
+    total = len(terminals_raw)
+    total_pages = max(1, (total + page_size - 1) // page_size)
+    page = max(1, min(page, total_pages))
+    start = (page - 1) * page_size
+    end = start + page_size
+    paged_terminals = [asdict(t) for t in terminals_raw[start:end]]
+    
     return templates.TemplateResponse(
         request, "index.html",
-        {"terminals": [asdict(t) for t in terminals_raw], "groups": groups},
+        {
+            "terminals": paged_terminals,
+            "all_terminals": [asdict(t) for t in terminals_raw],
+            "groups": groups,
+            "status_map": status_map,
+            "health_map": health_map,
+            "online_count": online_count,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
+            "total": total,
+        },
     )
 
 
@@ -167,7 +538,11 @@ async def batch_page(request: Request):
 async def compare_page(request: Request):
     """配置对比页面"""
     terminals_raw = load_terminals()
+    terminals_with_alias = {t.ip: t.alias for t in terminals_raw}
     return templates.TemplateResponse(
         request, "compare.html",
-        {"terminals": [asdict(t) for t in terminals_raw]},
+        {
+            "terminals": [asdict(t) for t in terminals_raw],
+            "terminals_with_alias": terminals_with_alias,
+        },
     )

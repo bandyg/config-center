@@ -1,145 +1,861 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>批量操作</title>
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, 'Segoe UI', sans-serif; background: #f0f2f5; color: #333; }
-  .header { background: #1a1a2e; color: #fff; padding: 16px 24px; }
-  .header h1 { font-size: 20px; }
-  .nav { display: flex; gap: 8px; padding: 12px 24px; background: #fff; border-bottom: 1px solid #e0e0e0; }
-  .nav a { text-decoration: none; color: #555; padding: 6px 14px; border-radius: 6px; font-size: 14px; }
-  .nav a:hover { background: #e8f0fe; color: #1a73e8; }
-  .nav a.active { background: #1a73e8; color: #fff; }
-  .container { max-width: 1000px; margin: 0 auto; padding: 24px; }
-  .card { background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); padding: 24px; margin-bottom: 16px; }
-  .card h3 { font-size: 16px; margin-bottom: 12px; }
-  label { display: block; font-size: 13px; color: #555; margin: 8px 0 4px; }
-  select, textarea { width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; }
-  select[multiple] { min-height: 150px; }
-  textarea { font-family: monospace; min-height: 200px; }
-  .checkbox-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; }
-  .checkbox-grid label { font-weight: normal; font-size: 13px; display: flex; align-items: center; gap: 6px; cursor: pointer; }
-  .btn { padding: 10px 24px; background: #1a73e8; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; margin-top: 12px; }
-  .btn:hover { background: #1557b0; }
-  .btn:disabled { opacity: 0.6; cursor: not-allowed; }
-  .btn.danger { background: #d93025; }
-  .btn.danger:hover { background: #b3261e; }
-  .result { margin-top: 16px; }
-  .result pre { background: #f8f9fa; padding: 12px; border-radius: 6px; font-size: 12px; max-height: 400px; overflow-y: auto; }
-  .result .ok { color: #1b7a1b; }
-  .result .err { color: #c41e1e; }
-</style>
-</head>
-<body>
-<div class="header"><h1>📦 批量配置操作</h1></div>
-<div class="nav">
-  <a href="/">📋 终端列表</a>
-  <a href="/batch" class="active">📦 批量操作</a>
-  <a href="/compare">🔍 配置对比</a>
-</div>
-<div class="container">
-  <div class="card">
-    <h3>🎯 选择目标终端</h3>
-    <label>按分组选择：</label>
-    <div class="checkbox-grid">
-    {% for g in groups %}
-      <label><input type="checkbox" class="group-cb" value="{{g}}" onchange="onGroupChange()"> {{g}}</label>
-    {% endfor %}
-    </div>
-    <label>或按终端选择：</label>
-    <div class="checkbox-grid">
-    {% for t in terminals %}
-      <label><input type="checkbox" class="terminal-cb" value="{{t.ip}}" data-group="{{t.group}}"> {{t.alias}} ({{t.ip}})</label>
-    {% endfor %}
-    </div>
-    <div id="target-summary" style="margin-top:8px;font-size:13px;color:#888"></div>
-  </div>
-
-  <div class="card">
-    <h3>⚙️ 配置内容 (JSON)</h3>
-    <label>配置项：</label>
-    <select id="config-key">
-      <option value="serviceConfig">serviceConfig</option>
-      <option value="terminalFunction">terminalFunction</option>
-      <option value="supervisorConfig">supervisorConfig</option>
-      <option value="bcConfig">bcConfig</option>
-      <option value="infoConfig">infoConfig</option>
-      <option value="webConfig">webConfig</option>
-      <option value="posterConfig">posterConfig</option>
-      <option value="ctcConfig">ctcConfig</option>
-    </select>
-    <label>配置值 (JSON)：</label>
-    <textarea id="config-value" placeholder='{"demoMode": false}'></textarea>
-    <button class="btn danger" onclick="executeBatch()" id="exec-btn">🚀 推送到选中终端</button>
-  </div>
-
-  <div class="card result" id="result-card" style="display:none">
-    <h3>📊 执行结果</h3>
-    <pre id="result-output"></pre>
-  </div>
-</div>
-
-<script>
-function onGroupChange() {
-  const selectedGroups = Array.from(document.querySelectorAll('.group-cb:checked')).map(cb => cb.value);
-  document.querySelectorAll('.terminal-cb').forEach(cb => {
-    if (selectedGroups.length === 0) {
-      cb.disabled = false;
-    } else {
-      cb.disabled = selectedGroups.includes(cb.dataset.group);
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>批量操作</title>
+  <link rel="stylesheet" href="/static/css/app.css">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
     }
-  });
-  updateSummary();
-}
 
-function updateSummary() {
-  const ips = Array.from(document.querySelectorAll('.terminal-cb:checked')).map(cb => cb.value);
-  const groups = Array.from(document.querySelectorAll('.group-cb:checked')).map(cb => cb.value);
-  const total = ips.length + (groups.length > 0 ? ' (含分组)' : '');
-  document.getElementById('target-summary').textContent = `已选 ${ips.length} 台终端` + (groups.length ? ` + ${groups.length} 个分组` : '');
-}
+    body {
+      font-family: -apple-system, 'Segoe UI', sans-serif;
+      background: #f0f2f5;
+      color: #333;
+    }
 
-document.querySelectorAll('.terminal-cb').forEach(cb => cb.addEventListener('change', updateSummary));
+    .header {
+      background: #1a1a2e;
+      color: #fff;
+      padding: 16px 24px;
+    }
 
-async function executeBatch() {
-  const ips = Array.from(document.querySelectorAll('.terminal-cb:checked')).map(cb => cb.value);
-  const groups = Array.from(document.querySelectorAll('.group-cb:checked')).map(cb => cb.value);
-  const key = document.getElementById('config-key').value;
-  const valueStr = document.getElementById('config-value').value;
+    .header h1 {
+      font-size: 20px;
+    }
 
-  if (ips.length === 0 && groups.length === 0) { alert('请选择至少一个终端或分组'); return; }
-  if (!valueStr) { alert('请输入配置值'); return; }
+    .nav {
+      display: flex;
+      gap: 8px;
+      padding: 12px 24px;
+      background: #fff;
+      border-bottom: 1px solid #e0e0e0;
+    }
 
-  let value;
-  try { value = JSON.parse(valueStr); } catch(e) { alert('JSON 格式错误'); return; }
+    .nav a {
+      text-decoration: none;
+      color: #555;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 14px;
+    }
 
-  const btn = document.getElementById('exec-btn');
-  btn.disabled = true;
-  btn.textContent = '执行中...';
+    .nav a:hover {
+      background: #e8f0fe;
+      color: #1a73e8;
+    }
 
-  const r = await fetch('/api/batch', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ targets: { ips, groups }, configs: { [key]: value } }),
-  });
-  const data = await r.json();
+    .nav a.active {
+      background: #1a73e8;
+      color: #fff;
+    }
 
-  const resultCard = document.getElementById('result-card');
-  resultCard.style.display = 'block';
-  const out = document.getElementById('result-output');
-  let html = `共推送 ${data.total} 台终端\n\n`;
-  for (const r of data.results) {
-    const icon = r.status === 200 ? '✅' : '❌';
-    html += `${icon} ${r.alias} (${r.ip}) / ${r.config}: ${r.status}\n`;
-  }
-  out.textContent = html;
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 24px;
+    }
 
-  btn.disabled = false;
-  btn.textContent = '🚀 推送到选中终端';
-}
-</script>
+    .card {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+
+    .card h3 {
+      font-size: 16px;
+      margin-bottom: 12px;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      color: #555;
+      margin: 8px 0 4px;
+    }
+
+    select,
+    textarea {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    textarea {
+      font-family: monospace;
+      min-height: 200px;
+    }
+
+    .btn {
+      padding: 10px 24px;
+      background: #1a73e8;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      margin-top: 12px;
+    }
+
+    .btn:hover {
+      background: #1557b0;
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .btn.danger {
+      background: #d93025;
+    }
+
+    .btn.danger:hover {
+      background: #b3261e;
+    }
+
+    .btn.small {
+      padding: 4px 12px;
+      font-size: 12px;
+      margin-top: 0;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-left: 4px;
+    }
+
+    .badge.online {
+      background: #e6f7e6;
+      color: #1b7a1b;
+    }
+
+    .badge.offline {
+      background: #ffe6e6;
+      color: #c41e1e;
+    }
+
+    .result {
+      margin-top: 16px;
+    }
+
+    .result pre {
+      background: #f8f9fa;
+      padding: 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    /* 分组筛选样式 */
+    .filter-bar {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .filter-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 12px;
+      border: 1px solid #ddd;
+      border-radius: 16px;
+      cursor: pointer;
+      font-size: 13px;
+      user-select: none;
+      background: #fff;
+      transition: all 0.15s;
+    }
+
+    .filter-tag:hover {
+      border-color: #1a73e8;
+      background: #f0f4ff;
+    }
+
+    .filter-tag.active {
+      background: #1a73e8;
+      color: #fff;
+      border-color: #1a73e8;
+    }
+
+    .filter-tag .count {
+      font-size: 11px;
+      opacity: 0.7;
+    }
+
+    .term-list {
+      max-height: 300px;
+      overflow-y: auto;
+      border: 1px solid #eee;
+      border-radius: 6px;
+      padding: 4px 0;
+    }
+
+    .term-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .term-item:hover {
+      background: #f8f9ff;
+    }
+
+    .term-item.checked {
+      background: #f0f4ff;
+    }
+
+    .term-item input {
+      margin: 0;
+    }
+
+    .summary-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 8px;
+      font-size: 13px;
+      color: #555;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 8px;
+      background: #e0e0e0;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+
+    .progress-bar .fill {
+      height: 100%;
+      background: #1a73e8;
+      border-radius: 4px;
+      transition: width 0.3s;
+    }
+
+    .result-item {
+      padding: 4px 0;
+      font-size: 13px;
+    }
+
+    .result-item.ok {
+      color: #1b7a1b;
+    }
+
+    .result-item.err {
+      color: #c41e1e;
+    }
+
+    /* ── Diff 预览 ── */
+    .diff-summary {
+      display: flex;
+      gap: 12px;
+      margin: 8px 0;
+      font-size: 12px;
+    }
+
+    .diff-summary span {
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+
+    .diff-summary .add {
+      background: #e6f7e6;
+      color: #1b7a1b;
+    }
+
+    .diff-summary .del {
+      background: #ffe6e6;
+      color: #c41e1e;
+    }
+
+    .diff-summary .same {
+      background: #f0f0f0;
+      color: #888;
+    }
+
+    .diff-pre {
+      background: #f5f7fa;
+      color: #1f2933;
+      padding: 12px;
+      border-radius: 6px;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      max-height: 400px;
+      overflow: auto;
+      white-space: pre;
+      border: 1px solid #e4e7eb;
+    }
+
+    .diff-line {
+      display: flex;
+      padding: 0 4px;
+    }
+
+    .diff-line:hover {
+      background: rgba(26, 115, 232, 0.06);
+    }
+
+    .diff-ln {
+      display: inline-block;
+      width: 26px;
+      text-align: right;
+      margin-right: 6px;
+      color: #9aa5b1;
+      user-select: none;
+      flex-shrink: 0;
+    }
+
+    .diff-line.diff-eq {
+      background: transparent;
+    }
+
+    .diff-line.diff-add {
+      background: #e6f7e6;
+    }
+
+    .diff-line.diff-add .diff-ln {
+      color: #1b7a1b;
+    }
+
+    .diff-line.diff-add .diff-content {
+      color: #14532d;
+    }
+
+    .diff-line.diff-del {
+      background: #ffe6e6;
+    }
+
+    .diff-line.diff-del .diff-ln {
+      color: #c41e1e;
+    }
+
+    .diff-line.diff-del .diff-content {
+      color: #7f1d1d;
+    }
+
+    .diff-prefix {
+      display: inline-block;
+      width: 14px;
+      color: #9aa5b1;
+      user-select: none;
+      flex-shrink: 0;
+      font-weight: 600;
+    }
+
+    .diff-line.diff-add .diff-prefix {
+      color: #1b7a1b;
+    }
+
+    .diff-line.diff-del .diff-prefix {
+      color: #c41e1e;
+    }
+
+    .diff-content {
+      flex: 1;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="header">
+    <h1>📦 批量配置操作</h1>
+  </div>
+  <div class="nav">
+    <a href="/">📋 终端列表</a>
+    <a href="/batch" class="active">📦 批量操作</a>
+    <a href="/compare">🔍 配置对比</a>
+  </div>
+  <div class="container">
+    <!-- 选择目标终端 -->
+    <div class="card">
+      <h3>🎯 选择目标终端</h3>
+      <label style="font-size:13px;color:#888;margin-bottom:8px">按分组筛选（点击分组标签快速选择该组所有终端）</label>
+      <div class="filter-bar" id="group-filters">
+        {% for g in groups %}
+        <span class="filter-tag" data-group="{{g}}" onclick="toggleGroup('{{g}}')">
+          {{g}} <span class="count" id="group-count-{{g}}">0</span>
+        </span>
+        {% endfor %}
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin:8px 0">
+        <label style="font-size:13px;color:#555;margin:0">选择终端：</label>
+        <div>
+          <span class="batch-select-all" onclick="selectAll()">全选</span>
+          <span style="color:#ccc;margin:0 4px">|</span>
+          <span class="batch-select-all" onclick="deselectAll()">取消全选</span>
+        </div>
+      </div>
+      <div class="term-list" id="terminal-list">
+        {% for t in terminals %}
+        <div class="term-item" data-ip="{{t.ip}}" data-group="{{t.group}}">
+          <input type="checkbox" class="terminal-cb" value="{{t.ip}}" data-group="{{t.group}}" id="cb-{{t.ip}}"
+            onclick="event.stopPropagation()" onchange="updateSummary()">
+          <label for="cb-{{t.ip}}"
+            style="font-weight:normal;font-size:13px;margin:0;cursor:pointer;flex:1;display:flex;justify-content:space-between">
+            <span>{{t.alias}} <code style="font-size:12px;color:#888">({{t.ip}})</code></span>
+            <span class="badge online" id="status-badge-{{t.ip}}" style="display:none">在线</span>
+            <span class="badge offline" id="status-offline-{{t.ip}}" style="display:none">离线</span>
+            <span class="badge offline" id="status-loading-{{t.ip}}">检测中...</span>
+          </label>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="summary-bar">
+        <span id="target-summary">未选择任何终端</span>
+        <span id="online-summary"></span>
+      </div>
+    </div>
+
+    <!-- 配置内容 -->
+    <div class="card">
+      <h3>⚙️ 配置内容</h3>
+      <label>配置项：</label>
+      <select id="config-key">
+        <option value="serviceConfig">serviceConfig — 服务配置</option>
+        <option value="terminalFunction">terminalFunction — 终端功能配置</option>
+        <option value="supervisorConfig">supervisorConfig — 监管配置</option>
+        <option value="bcConfig">bcConfig — 后台通信配置</option>
+        <option value="infoConfig">infoConfig — 信息展示配置</option>
+        <option value="webConfig">webConfig — Web 界面配置</option>
+        <option value="posterConfig">posterConfig — 海报配置</option>
+        <option value="ctcConfig">ctcConfig — CTC 对接配置</option>
+        <option value="transactionConfig">transactionConfig — 交易配置</option>
+      </select>
+      <label>配置值 (JSON)：</label>
+      <textarea id="config-value" placeholder="勾选终端后自动加载首个终端的实时配置" rows="12"></textarea>
+      <div style="font-size:12px;color:#888;margin-top:4px" id="config-source-hint">等待选择终端...</div>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="btn small" onclick="formatConfigValue()">格式化 JSON</button>
+        <button class="btn small" onclick="loadFromFirstTerminal()">🔄 重新拉取</button>
+        <button class="btn small" onclick="previewDiff()">📋 预览变更</button>
+      </div>
+      <button class="btn danger" onclick="executeBatch()" id="exec-btn" disabled>🚀 推送到选中终端</button>
+      <div id="batch-msg" style="font-size:13px;margin-top:8px;color:#888"></div>
+    </div>
+
+    <!-- 进度与结果 -->
+    <div class="card result" id="result-card" style="display:none">
+      <h3>📊 执行进度</h3>
+      <div class="progress-bar" id="progress-bar">
+        <div class="fill" id="progress-fill" style="width:0%"></div>
+      </div>
+      <div style="font-size:13px;color:#555;margin-top:4px" id="progress-text">准备中...</div>
+      <div style="margin-top:12px">
+        <h4 style="font-size:14px;margin-bottom:8px">推送结果</h4>
+        <div id="result-output"></div>
+      </div>
+    </div>
+
+    <!-- 确认弹窗 (复用 app.css 样式) -->
+    <div class="modal-overlay" id="confirm-modal">
+      <div class="modal-box">
+        <h3 id="modal-title">确认批量推送</h3>
+        <div id="modal-body"></div>
+        <div class="modal-actions">
+          <button class="btn-cancel" onclick="closeModal()">取消</button>
+          <button class="btn-confirm" id="modal-confirm-btn" onclick="executeBatchConfirmed()">确认推送</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/diff_match_patch/20121119/diff_match_patch.js"></script>
+  <script>
+    // ── 终端在线状态检测 ──
+    document.addEventListener('DOMContentLoaded', function () {
+      refreshOnlineStatus();
+    });
+
+    async function refreshOnlineStatus() {
+      try {
+        const r = await fetch('/api/terminals');
+        const data = await r.json();
+        let onlineCount = 0;
+        for (const t of data) {
+          const onlineBadge = document.getElementById('status-badge-' + t.ip);
+          const offlineBadge = document.getElementById('status-offline-' + t.ip);
+          const loadingBadge = document.getElementById('status-loading-' + t.ip);
+          if (loadingBadge) loadingBadge.style.display = 'none';
+          if (t.online) {
+            if (onlineBadge) { onlineBadge.style.display = 'inline'; onlineBadge.textContent = '在线'; }
+            if (offlineBadge) offlineBadge.style.display = 'none';
+            onlineCount++;
+          } else {
+            if (offlineBadge) { offlineBadge.style.display = 'inline'; offlineBadge.textContent = '离线'; }
+            if (onlineBadge) onlineBadge.style.display = 'none';
+          }
+        }
+        document.getElementById('online-summary').textContent = onlineCount + ' 台在线';
+      } catch (e) {
+        console.warn('Failed to check online status:', e);
+      }
+    }
+
+    // ── 分组筛选 ──
+    var groupActive = {};
+
+    function toggleGroup(group) {
+      // 切换分组状态
+      groupActive[group] = !groupActive[group];
+
+      // 更新标签样式
+      document.querySelectorAll('.filter-tag').forEach(function (tag) {
+        tag.classList.toggle('active', groupActive[tag.dataset.group]);
+      });
+
+      // 根据活跃分组更新终端勾选
+      const hasActive = Object.values(groupActive).some(function (v) { return v; });
+      document.querySelectorAll('.terminal-cb').forEach(function (cb) {
+        if (!hasActive) {
+          cb.checked = false;
+        } else {
+          cb.checked = groupActive[cb.dataset.group] || false;
+        }
+      });
+
+      updateSummary();
+    }
+
+    // ── 单个终端选择（已由 checkbox 原生处理）──
+
+    // ── 全选/取消全选 ──
+    function selectAll() {
+      document.querySelectorAll('.terminal-cb').forEach(function (cb) { cb.checked = true; });
+      // 清除分组筛选高亮
+      document.querySelectorAll('.filter-tag').forEach(function (tag) { tag.classList.remove('active'); });
+      groupActive = {};
+      updateSummary();
+      // 全选后从第一台终端拉取实时配置
+      loadFromFirstTerminal();
+    }
+
+    function deselectAll() {
+      document.querySelectorAll('.terminal-cb').forEach(function (cb) { cb.checked = false; });
+      document.querySelectorAll('.filter-tag').forEach(function (tag) { tag.classList.remove('active'); });
+      groupActive = {};
+      updateSummary();
+      document.getElementById('config-value').value = '';
+      document.getElementById('config-source-hint').textContent = '未选择任何终端';
+      document.getElementById('config-source-hint').style.color = '#888';
+    }
+
+    // ── 汇总更新 ──
+    function updateSummary() {
+      const checked = document.querySelectorAll('.terminal-cb:checked');
+      const count = checked.length;
+      const summary = document.getElementById('target-summary');
+      const btn = document.getElementById('exec-btn');
+
+      if (count === 0) {
+        summary.textContent = '未选择任何终端';
+        btn.disabled = true;
+      } else {
+        summary.textContent = '已选择 ' + count + ' 台终端';
+        btn.disabled = false;
+      }
+
+      // 更新分组数量统计
+      document.querySelectorAll('.filter-tag').forEach(function (tag) {
+        const group = tag.dataset.group;
+        const cnt = document.querySelectorAll('.terminal-cb[data-group="' + group + '"]:checked').length;
+        document.getElementById('group-count-' + group).textContent = cnt;
+      });
+    }
+
+    // 终端 checkbox 变更时更新
+    document.querySelectorAll('.terminal-cb').forEach(function (cb) {
+      cb.addEventListener('change', function () {
+        this.closest('.term-item').classList.toggle('checked', this.checked);
+        // 取消对应分组的高亮
+        const group = this.dataset.group;
+        if (!this.checked && groupActive[group]) {
+          // 如果取消了一个终端，检查组里是否还有选中的
+          const anyChecked = document.querySelectorAll('.terminal-cb[data-group="' + group + '"]:checked').length > 0;
+          if (!anyChecked) {
+            groupActive[group] = false;
+            document.querySelector('.filter-tag[data-group="' + group + '"]')?.classList.remove('active');
+          }
+        }
+        updateSummary();
+        // 勾选变化时从首个终端拉取实时配置
+        if (this.checked) {
+          loadFromFirstTerminal();
+        }
+      });
+    });
+
+    // 切换配置项时重新拉取首个终端的配置
+    document.getElementById('config-key').addEventListener('change', function () {
+      loadFromFirstTerminal();
+    });
+
+    // ── 从首个选中的终端拉取实时配置 ──
+    function getFirstSelectedIP() {
+      const checked = document.querySelectorAll('.terminal-cb:checked');
+      if (checked.length === 0) return null;
+      // 按 DOM 顺序（即 terminals.yaml 顺序）取第一个
+      const all = Array.from(document.querySelectorAll('.terminal-cb'));
+      for (var i = 0; i < all.length; i++) {
+        if (all[i].checked) return all[i].value;
+      }
+      return null;
+    }
+
+    async function loadFromFirstTerminal() {
+      const ta = document.getElementById('config-value');
+      const hint = document.getElementById('config-source-hint');
+      const key = document.getElementById('config-key').value;
+      const ip = getFirstSelectedIP();
+
+      if (!ip) {
+        ta.value = '';
+        hint.textContent = '未选择任何终端';
+        hint.style.color = '#888';
+        return;
+      }
+
+      hint.textContent = '正在从 ' + ip + ' 拉取 ' + key + '...';
+      hint.style.color = '#888';
+
+      try {
+        const r = await fetch('/api/proxy/' + ip + '/config/' + key);
+        const data = await r.json();
+        if (data.error) {
+          ta.value = '';
+          hint.textContent = '❌ 拉取失败: ' + data.error;
+          hint.style.color = '#c41e1e';
+        } else {
+          ta.value = JSON.stringify(data, null, 2);
+          hint.textContent = '✅ 已加载 ' + ip + ' 的 ' + key + ' 当前值 (实时拉取)';
+          hint.style.color = '#1b7a1b';
+        }
+      } catch (e) {
+        hint.textContent = '❌ 请求失败: ' + e.message;
+        hint.style.color = '#c41e1e';
+      }
+    }
+
+    // ── JSON 格式化 ──
+    function formatConfigValue() {
+      const ta = document.getElementById('config-value');
+      try {
+        const val = JSON.parse(ta.value);
+        ta.value = JSON.stringify(val, null, 2);
+        document.getElementById('batch-msg').textContent = '✅ JSON 格式化完成';
+        document.getElementById('batch-msg').style.color = '#1b7a1b';
+      } catch (e) {
+        document.getElementById('batch-msg').textContent = '❌ JSON 格式错误: ' + e.message;
+        document.getElementById('batch-msg').style.color = '#c41e1e';
+      }
+    }
+
+    // ── 预览变更（diff 视图）──
+    async function previewDiff() {
+      const ips = Array.from(document.querySelectorAll('.terminal-cb:checked')).map(function (cb) { return cb.value; });
+      const key = document.getElementById('config-key').value;
+      const valueStr = document.getElementById('config-value').value;
+      const firstIP = ips[0];
+
+      if (ips.length === 0) { alert('请先选择目标终端'); return; }
+      if (!valueStr) { alert('请输入配置值'); return; }
+
+      let newVal;
+      try { newVal = JSON.parse(valueStr); } catch (e) { alert('JSON 格式错误: ' + e.message); return; }
+
+      // 显示加载状态
+      const modalBody = document.getElementById('modal-body');
+      document.getElementById('modal-title').textContent = '预览变更 — 将推送到 ' + ips.length + ' 台终端';
+      modalBody.innerHTML = '<p style="color:#888">⏳ 正在从 ' + firstIP + ' 拉取当前 ' + key + ' ...</p>';
+      document.getElementById('modal-confirm-btn').textContent = '确认推送';
+      document.getElementById('confirm-modal').classList.add('active');
+
+      // 拉取首台终端的当前值
+      let oldVal = {};
+      try {
+        const r = await fetch('/api/proxy/' + firstIP + '/config/' + key);
+        const data = await r.json();
+        if (!data.error) oldVal = data;
+      } catch (e) {
+        modalBody.innerHTML = '<p style="color:#c41e1e">❌ 拉取首台终端配置失败: ' + escapeHtml(e.message) + '</p>';
+        return;
+      }
+
+      // 计算行级 diff
+      const oldText = JSON.stringify(oldVal, null, 2);
+      const newText = JSON.stringify(newVal, null, 2);
+      const html = renderUnifiedDiff(oldText, newText);
+
+      // 统计增删
+      const added = (html.match(/class="diff-line diff-add"/g) || []).length;
+      const removed = (html.match(/class="diff-line diff-del"/g) || []).length;
+      const noChange = (added === 0 && removed === 0);
+
+      const diffArea = noChange
+        ? '<div class="diff-pre" style="text-align:center;color:#888;padding:24px 12px">✅ 即将推送的配置与 ' + firstIP + ' 的当前值一致，无增删改</div>'
+        : '<div class="diff-pre">' + html + '</div>';
+
+      modalBody.innerHTML =
+        '<p><strong>配置项：</strong>' + key + '</p>' +
+        '<p><strong>目标终端：</strong>' + ips.join(', ') + ' <span style="color:#888">(基准: ' + firstIP + ')</span></p>' +
+        '<div class="diff-summary">' +
+        (noChange
+          ? '<span class="same">无变更</span>'
+          : '<span class="add">+ ' + added + ' 新增</span><span class="del">- ' + removed + ' 删除</span>') +
+        '</div>' +
+        diffArea;
+
+      // 保存待确认的操作
+      window.__pendingBatch = { ips: ips, key: key, value: newVal };
+    }
+
+    // ── 行级 unified diff 渲染（diff_match_patch）──
+    function renderUnifiedDiff(oldText, newText) {
+      // 库未加载时降级
+      if (typeof diff_match_patch === 'undefined') {
+        return '<div class="diff-line diff-eq"><span class="diff-ln"> </span><span class="diff-prefix"> </span><span class="diff-content">' +
+          escapeHtml(oldText) + '\n— 替换为 —\n' + escapeHtml(newText) + '</span></div>';
+      }
+
+      var dmp = new diff_match_patch();
+      dmp.Diff_Timeout = 2;
+
+      var a = dmp.diff_linesToChars_(oldText, newText);
+      var diffs = dmp.diff_main(a.chars1, a.chars2, false);
+      dmp.diff_charsToLines_(diffs, a.lineArray);
+
+      var oldLines = oldText.split('\n');
+      var newLines = newText.split('\n');
+      var html = '';
+      var oldLineNum = 0;
+      var newLineNum = 0;
+
+      for (var i = 0; i < diffs.length; i++) {
+        var op = diffs[i][0];   // -1 / 0 / 1
+        var text = diffs[i][1];
+        var lines = text.split('\n');
+        // 去掉末尾空行（split 产生）
+        if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
+
+        for (var j = 0; j < lines.length; j++) {
+          var line = lines[j];
+          if (op === DIFF_EQUAL) {
+            oldLineNum++;
+            newLineNum++;
+            html += '<div class="diff-line diff-eq">' +
+              '<span class="diff-ln">' + oldLineNum + '</span>' +
+              '<span class="diff-ln">' + newLineNum + '</span>' +
+              '<span class="diff-prefix"> </span>' +
+              '<span class="diff-content">' + escapeHtml(line) + '</span></div>';
+          } else if (op === DIFF_DELETE) {
+            oldLineNum++;
+            html += '<div class="diff-line diff-del">' +
+              '<span class="diff-ln">' + oldLineNum + '</span>' +
+              '<span class="diff-ln"> </span>' +
+              '<span class="diff-prefix">-</span>' +
+              '<span class="diff-content">' + escapeHtml(line) + '</span></div>';
+          } else if (op === DIFF_INSERT) {
+            newLineNum++;
+            html += '<div class="diff-line diff-add">' +
+              '<span class="diff-ln"> </span>' +
+              '<span class="diff-ln">' + newLineNum + '</span>' +
+              '<span class="diff-prefix">+</span>' +
+              '<span class="diff-content">' + escapeHtml(line) + '</span></div>';
+          }
+        }
+      }
+      return html;
+    }
+
+    function escapeHtml(str) {
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    // ── 执行批量推送 ──
+    function executeBatch() {
+      // 先走预览
+      previewDiff();
+    }
+
+    function executeBatchConfirmed() {
+      const pending = window.__pendingBatch;
+      if (!pending) return;
+      window.__pendingBatch = null;
+      closeModal();
+
+      const btn = document.getElementById('exec-btn');
+      btn.disabled = true;
+      btn.textContent = '推送中...';
+
+      const resultCard = document.getElementById('result-card');
+      resultCard.style.display = 'block';
+      document.getElementById('progress-text').textContent = '推送中 0/' + pending.ips.length + '...';
+
+      const startTime = Date.now();
+
+      fetch('/api/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targets: { ips: pending.ips }, configs: { [pending.key]: pending.value } }),
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+          document.getElementById('progress-fill').style.width = '100%';
+          document.getElementById('progress-text').textContent = '完成 (' + elapsed + 's)';
+
+          const out = document.getElementById('result-output');
+          let successCount = 0, failCount = 0;
+          let html = '';
+          for (const r of data.results) {
+            const ok = r.status === 200;
+            if (ok) successCount++; else failCount++;
+            const cls = ok ? 'ok' : 'err';
+            const icon = ok ? '✅' : '❌';
+            html += '<div class="result-item ' + cls + '">' + icon + ' ' + r.alias + ' (' + r.ip + '): ' + (ok ? '成功' : (r.error || '失败')) + '</div>';
+          }
+          html += '<div style="margin-top:8px;font-weight:600">总计: ' + data.total + ' | ✅ ' + successCount + ' 成功 | ❌ ' + failCount + ' 失败</div>';
+          out.innerHTML = html;
+
+          btn.disabled = false;
+          btn.textContent = '🚀 推送到选中终端';
+        })
+        .catch(function (e) {
+          document.getElementById('progress-text').textContent = '❌ 请求失败: ' + e.message;
+          btn.disabled = false;
+          btn.textContent = '🚀 推送到选中终端';
+        });
+    }
+
+    function closeModal() {
+      document.getElementById('confirm-modal').classList.remove('active');
+      window.__pendingBatch = null;
+    }
+  </script>
 </body>
+
 </html>

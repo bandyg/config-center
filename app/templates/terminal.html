@@ -5,6 +5,21 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{terminal.alias}} — 配置详情</title>
+  <!-- CodeMirror 5 (CDN) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/theme/default.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/javascript/javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/edit/matchbrackets.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/foldcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/foldgutter.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/fold/brace-fold.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/search/search.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/search/searchcursor.min.js"></script>
+  <!-- diff-match-patch (CDN) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/diff_match_patch/20121119/diff_match_patch.js"></script>
+  <!-- 项目自定义样式 -->
+  <link rel="stylesheet" href="/static/css/app.css">
   <style>
     * {
       margin: 0;
@@ -104,6 +119,7 @@
       cursor: pointer;
       display: flex;
       justify-content: space-between;
+      align-items: center;
     }
 
     .config-header:hover {
@@ -112,50 +128,72 @@
 
     .config-body {
       padding: 16px 20px;
-      display: block;
+      max-height: 2000px;
+      overflow: hidden;
+      transition: max-height 0.35s ease, padding 0.35s ease, opacity 0.25s ease;
+      opacity: 1;
     }
 
     .config-body.hidden {
-      display: none;
+      max-height: 0;
+      padding: 0 20px;
+      opacity: 0;
     }
 
-    pre {
-      background: #f8f9fa;
-      border-radius: 6px;
-      padding: 16px;
-      font-size: 13px;
-      overflow-x: auto;
-      white-space: pre-wrap;
-      word-break: break-all;
+    .config-body .CodeMirror {
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      height: auto;
+      min-height: 200px;
     }
 
     .edit-form {
-      margin-top: 12px;
+      margin-top: 0;
     }
 
-    .edit-form textarea {
-      width: 100%;
-      min-height: 120px;
-      font-family: monospace;
-      font-size: 13px;
-      padding: 8px;
-      border: 1px solid #ddd;
-      border-radius: 6px;
+    /* ── 编辑区按钮布局 ── */
+    .edit-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
     }
 
     .edit-form button {
       padding: 8px 20px;
-      background: #1a73e8;
-      color: #fff;
       border: none;
       border-radius: 6px;
       cursor: pointer;
       font-size: 13px;
-      margin-top: 8px;
     }
 
-    .edit-form button:hover {
+    .edit-form button:first-child {
+      background: #1a73e8;
+      color: #fff;
+    }
+
+    .edit-form button:first-child:hover {
       background: #1557b0;
+    }
+
+    /* ── 取消按钮：默认隐藏，有变更时渐显 ── */
+    .cancel-btn {
+      background: #fff;
+      color: #c41e1e;
+      border: 1px solid #c41e1e !important;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
+      pointer-events: none;
+    }
+
+    .cancel-btn:hover {
+      background: #fff0f0;
+    }
+
+    .cancel-btn.visible {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
     }
 
     .edit-form .msg {
@@ -169,6 +207,230 @@
 
     .arrow.open {
       transform: rotate(90deg);
+    }
+
+    /* ── 预览变更按钮：默认隐藏，发生变更时渐显 ── */
+    .preview-btn {
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
+      pointer-events: none;
+    }
+
+    .preview-btn.visible {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+    }
+
+    /* ── 全屏模式 ── */
+    .CodeMirror-fullscreen {
+      position: fixed !important;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: auto !important;
+      z-index: 999;
+      background: #fff;
+    }
+
+    .CodeMirror-fullscreen .CodeMirror {
+      height: 100% !important;
+    }
+
+    /* 全屏浮动工具栏 */
+    .fullscreen-toolbar {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 1000;
+      height: 48px;
+      background: rgba(255, 255, 255, 0.97);
+      border-bottom: 1px solid #e0e0e0;
+      padding: 0 16px;
+      align-items: center;
+      gap: 10px;
+      backdrop-filter: blur(4px);
+    }
+
+    .fullscreen-toolbar.active {
+      display: flex;
+    }
+
+    .fullscreen-toolbar .ft-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .fullscreen-toolbar button {
+      padding: 6px 14px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      background: #fff;
+      font-size: 13px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .fullscreen-toolbar button:hover {
+      background: #f0f0f0;
+    }
+
+    .fullscreen-toolbar .ft-save {
+      background: #1a73e8;
+      color: #fff;
+      border-color: #1a73e8;
+    }
+
+    .fullscreen-toolbar .ft-save:hover {
+      background: #1557b0;
+    }
+
+    .fullscreen-toolbar .ft-exit {
+      color: #c41e1e;
+      border-color: #c41e1e;
+    }
+
+    .fullscreen-toolbar .ft-exit:hover {
+      background: #fff0f0;
+    }
+
+    /* 全屏状态下 CodeMirror 留出工具栏空间 */
+    .CodeMirror-fullscreen .CodeMirror {
+      padding-top: 48px !important;
+    }
+
+    .fullscreen-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 998;
+      display: none;
+    }
+
+    .fullscreen-overlay.active {
+      display: block;
+    }
+
+    /* ── 数据概览 ── */
+    .config-overview {
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      margin-bottom: 12px;
+      overflow: hidden;
+    }
+
+    .overview-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      cursor: pointer;
+      user-select: none;
+      background: #fafafa;
+    }
+
+    .overview-header:hover {
+      background: #f0f4ff;
+    }
+
+    .overview-count {
+      font-size: 12px;
+      color: #888;
+      margin-left: auto;
+    }
+
+    .overview-body {
+      padding: 0 16px 12px;
+      overflow-x: auto;
+    }
+
+    .overview-body.hidden {
+      display: none;
+    }
+
+    .overview-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .overview-table th {
+      text-align: left;
+      padding: 8px 12px;
+      color: #888;
+      font-weight: 600;
+      border-bottom: 1px solid #e0e0e0;
+      font-size: 12px;
+    }
+
+    .overview-table td {
+      padding: 6px 12px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .overview-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .overview-table tr:hover td {
+      background: #f8faff;
+    }
+
+    .overview-table code {
+      font-size: 12px;
+      color: #333;
+      word-break: break-all;
+    }
+
+    .overview-table .preview-cell code {
+      color: #666;
+      font-size: 11px;
+    }
+
+    .type-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      background: #e8f0fe;
+      color: #1a73e8;
+    }
+
+    /* ── 工具栏：全部展开/收起 ── */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .toggle-all-btn {
+      padding: 6px 14px;
+      background: #f5f5f5;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 13px;
+      color: #555;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .toggle-all-btn:hover {
+      background: #e8e8e8;
     }
   </style>
 </head>
@@ -205,53 +467,518 @@
     </div>
 
     {% if online %}
+    <!-- 数据概览 -->
+    <div class="config-overview">
+      <div class="overview-header" onclick="toggleOverview()">
+        <span class="arrow" id="overview-arrow">▶</span>
+        <strong>数据概览</strong>
+        <span class="overview-count">{{ configs|length }} 项配置</span>
+      </div>
+      <div class="overview-body" id="overview-body">
+        <table class="overview-table">
+          <tr>
+            <th style="width:30%">配置项</th>
+            <th style="width:12%">类型</th>
+            <th style="width:42%">预览</th>
+            <th style="width:16%">大小</th>
+          </tr>
+          {% for key, val in configs.items() %}
+          {% set val_json = val|tojson(indent=2) %}
+          {% set preview = val_json[:60] + ('...' if val_json|length > 60 else '') %}
+          {% set size_kb = (val_json|length / 1024)|round(1) %}
+          {% set type_label = 'dict' if val is mapping else 'other' %}
+          <tr>
+            <td><code>{{ key }}</code></td>
+            <td><span class="type-badge">{{ type_label }}</span></td>
+            <td class="preview-cell"><code>{{ preview }}</code></td>
+            <td>{{ size_kb }} KB</td>
+          </tr>
+          {% endfor %}
+        </table>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <button class="toggle-all-btn" id="toggle-all-btn" onclick="toggleAll()">
+        <span id="toggle-all-text">展开</span>
+      </button>
+    </div>
     {% for key, val in configs.items() %}
-    <div class="config-section">
+    {% set config_json = val | tojson(indent=2) %}
+    <div class="config-section" data-key="{{key}}" data-ip="{{terminal.ip}}">
       <div class="config-header" onclick="toggle('{{key}}')">
         <span>{{key}}</span>
         <span class="arrow" id="arrow-{{key}}">▶</span>
       </div>
       <div class="config-body" id="body-{{key}}">
-        <div class="edit-form">
-          <textarea id="edit-{{key}}">{{ val | tojson(indent=2) }}</textarea>
-          <button onclick="saveConfig('{{terminal.ip}}', '{{key}}')">💾 保存</button>
-          <div class="msg" id="msg-{{key}}"></div>
+        <!-- 编辑区 -->
+        <div id="view-editor-{{key}}">
+          <div class="editor-toolbar">
+            <button onclick="formatJson('{{key}}')" title="格式化 JSON">格式化</button>
+            <button id="preview-btn-{{key}}" class="preview-btn" onclick="showSaveConfirm('{{terminal.ip}}', '{{key}}')"
+              title="保存前预览变更">📋 预览变更</button>
+            <button onclick="toggleFullscreen('{{key}}')" title="全屏编辑" style="margin-left:auto">⛶ 全屏</button>
+          </div>
+          <div class="edit-form">
+            <textarea id="edit-{{key}}" data-ip="{{terminal.ip}}" style="display:none">{{ config_json }}</textarea>
+            <div class="edit-actions">
+              <button onclick="showSaveConfirm('{{terminal.ip}}', '{{key}}')">💾 保存</button>
+              <button id="cancel-btn-{{key}}" class="cancel-btn" onclick="cancelEdit('{{key}}')">✕ 取消</button>
+            </div>
+            <div class="msg" id="msg-{{key}}"></div>
+          </div>
         </div>
       </div>
     </div>
     {% endfor %}
     {% else %}
-    <p style="text-align:center;color:#888;padding:40px">终端离线，无法获取配置</p>
+    <!-- 离线状态增强：重试按钮 + 缓存配置展示 -->
+    <div class="config-section" style="text-align:center;padding:40px">
+      <p style="font-size:16px;color:#c41e1e;margin-bottom:16px">⚠️ 终端离线，无法获取实时配置</p>
+      <p style="font-size:13px;color:#888;margin-bottom:20px">
+        请确认终端上的 config-serv 服务是否正常运行，或检查网络连接。
+      </p>
+      <button onclick="retryConnect('{{terminal.ip}}')"
+        style="padding:10px 24px;background:#1a73e8;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px">🔄
+        重试连接</button>
+      <div id="retry-msg" style="font-size:13px;color:#888;margin-top:12px"></div>
+      <div id="cached-config" style="display:none;margin-top:20px;text-align:left">
+        <h4 style="font-size:14px;margin-bottom:8px;color:#555">📦 上次缓存的配置</h4>
+        <pre id="cached-config-content"
+          style="background:#f8f9fa;border-radius:6px;padding:16px;font-size:13px;overflow-x:auto;white-space:pre-wrap;word-break:break-all;max-height:400px;overflow-y:auto"></pre>
+      </div>
+    </div>
     {% endif %}
   </div>
 
+  <!-- 全屏浮动工具栏 -->
+  <div class="fullscreen-toolbar" id="fullscreen-toolbar">
+    <span class="ft-title" id="ft-title">全屏编辑</span>
+    <button class="ft-save" id="ft-save-btn">💾 保存</button>
+    <button id="ft-preview-btn">📋 预览变更</button>
+    <button class="ft-exit" id="ft-exit-btn">✕ 退出全屏</button>
+  </div>
+
+  <!-- 确认弹窗 -->
+  <div class="modal-overlay" id="confirm-modal">
+    <div class="modal-box">
+      <h3 id="modal-title">确认操作</h3>
+      <div id="modal-body"></div>
+      <div class="modal-actions">
+        <button class="btn-cancel" onclick="closeModal()">取消</button>
+        <button class="btn-confirm" id="modal-confirm-btn" onclick="executeSave()">确认保存</button>
+      </div>
+    </div>
+  </div>
+
   <script>
+    // ── 状态变量 ──
+    var __pendingSave = null;  // { ip, key, value }
+    var __codemirror_editors = {};
+    // 存储每个配置项的原始值，用于预览变更时的 diff 对比
+    var __originalValues = {};
+
+    // ── 折叠面板 ──
     function toggle(key) {
       const body = document.getElementById('body-' + key);
       const arrow = document.getElementById('arrow-' + key);
       body.classList.toggle('hidden');
       arrow.classList.toggle('open');
+      syncToggleAllBtn();
     }
 
-    async function saveConfig(ip, key) {
-      const textarea = document.getElementById('edit-' + key);
-      const msg = document.getElementById('msg-' + key);
-      msg.textContent = '保存中...';
-      msg.style.color = '#888';
+    // ── 数据概览折叠 ──
+    function toggleOverview() {
+      const body = document.getElementById('overview-body');
+      const arrow = document.getElementById('overview-arrow');
+      body.classList.toggle('hidden');
+      arrow.classList.toggle('open');
+    }
+
+    // ── 全部展开 / 全部收起 ──
+    function toggleAll() {
+      var bodies = document.querySelectorAll('.config-body');
+      var isAllCollapsed = true;
+      for (var i = 0; i < bodies.length; i++) {
+        if (!bodies[i].classList.contains('hidden')) {
+          isAllCollapsed = false;
+          break;
+        }
+      }
+      var expand = isAllCollapsed; // 全部收起时点→展开，否则全部收起
+      for (var i = 0; i < bodies.length; i++) {
+        var body = bodies[i];
+        var key = body.id.replace('body-', '');
+        var arrow = document.getElementById('arrow-' + key);
+        if (expand) {
+          body.classList.remove('hidden');
+          if (arrow) arrow.classList.add('open');
+        } else {
+          body.classList.add('hidden');
+          if (arrow) arrow.classList.remove('open');
+        }
+      }
+      syncToggleAllBtn();
+    }
+
+    // ── 同步展开/收起按钮状态 ──
+    function syncToggleAllBtn() {
+      var text = document.getElementById('toggle-all-text');
+      if (!text) return;
+      var bodies = document.querySelectorAll('.config-body');
+      if (bodies.length === 0) return;
+      var allExpanded = true;
+      for (var i = 0; i < bodies.length; i++) {
+        if (bodies[i].classList.contains('hidden')) {
+          allExpanded = false;
+          break;
+        }
+      }
+      text.textContent = allExpanded ? '收起' : '展开';
+    }
+
+    // ── 预览按钮显示控制 ──
+    function updatePreviewBtn(key) {
+      var btn = document.getElementById('preview-btn-' + key);
+      var cancelBtn = document.getElementById('cancel-btn-' + key);
+      if (!btn) return;
+      var editor = __codemirror_editors[key];
+      if (!editor) return;
+      var currentVal = editor.getValue();
+      var originalVal = __originalValues[key] || '';
+      // 通过尝试解析再序列化来比较语义是否一致（忽略缩进差异）
+      var hasChanged = false;
       try {
-        const val = JSON.parse(textarea.value);
-        const r = await fetch(`/api/proxy/${ip}/config/${key}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(val),
-        });
-        msg.textContent = '✅ 保存成功';
-        msg.style.color = '#1b7a1b';
+        var c = JSON.stringify(JSON.parse(currentVal), null, 2);
+        var o = JSON.stringify(JSON.parse(originalVal), null, 2);
+        hasChanged = (c !== o);
       } catch (e) {
-        msg.textContent = '❌ ' + e.message;
-        msg.style.color = '#c41e1e';
+        // JSON 解析失败时比较原始文本
+        hasChanged = (currentVal !== originalVal);
+      }
+      btn.classList.toggle('visible', hasChanged);
+      if (cancelBtn) cancelBtn.classList.toggle('visible', hasChanged);
+    }
+
+    // ── 取消编辑，恢复原始值 ──
+    function cancelEdit(key) {
+      var editor = __codemirror_editors[key];
+      if (!editor) return;
+      var originalVal = __originalValues[key];
+      if (!originalVal) return;
+      editor.setValue(originalVal);
+      // 恢复后立即更新按钮状态（隐藏）
+      updatePreviewBtn(key);
+      showMsg(key, '已恢复为原始值', '#888');
+    }
+
+    // ── CodeMirror 初始化 ──
+    document.addEventListener('DOMContentLoaded', function () {
+      document.querySelectorAll('.config-body textarea[id^="edit-"]').forEach(textarea => {
+        const key = textarea.id.replace('edit-', '');
+        try {
+          // 保存原始值到独立变量，供预览变更时 diff 对比（与 DOM 解耦，避免被 CodeMirror 干扰）
+          __originalValues[key] = textarea.value;
+
+          const editor = CodeMirror.fromTextArea(textarea, {
+            mode: { name: 'javascript', json: true },
+            lineNumbers: true,
+            matchBrackets: true,
+            indentUnit: 2,
+            tabSize: 2,
+            lineWrapping: true,
+            foldGutter: true,
+            gutters: ['CodeMirror-linenumbers', 'CodeMirror-foldgutter'],
+            extraKeys: {
+              'Ctrl-S': function (cm) { showSaveConfirm(textarea.dataset.ip, key); },
+              'Cmd-S': function (cm) { showSaveConfirm(textarea.dataset.ip, key); }
+            }
+          });
+          editor.setSize(null, 300);
+          __codemirror_editors[key] = editor;
+
+          // CodeMirror 内容变化时自动更新隐藏 textarea 并检测变更
+          editor.on('change', function () {
+            textarea.value = editor.getValue();
+            updatePreviewBtn(key);
+          });
+        } catch (e) {
+          console.warn('CodeMirror init failed for ' + key + ':', e);
+        }
+      });
+      // 初始化后同步全部展开/收起按钮状态
+      syncToggleAllBtn();
+    });
+
+    // ── JSON 格式化 ──
+    function formatJson(key) {
+      const editor = __codemirror_editors[key];
+      if (!editor) return;
+      try {
+        const val = JSON.parse(editor.getValue());
+        editor.setValue(JSON.stringify(val, null, 2));
+        showMsg(key, '✅ JSON 格式化完成', '#1b7a1b');
+        updatePreviewBtn(key);
+      } catch (e) {
+        showMsg(key, '❌ JSON 格式错误: ' + e.message, '#c41e1e');
       }
     }
+
+    function escapeHtml(str) {
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // ── 行号左对齐填充 ──
+    function padLeft(num, width) {
+      var s = String(num);
+      while (s.length < width) s = ' ' + s;
+      return s;
+    }
+
+    // ── 确认弹窗 + Diff 预览 ──
+    function showSaveConfirm(ip, key) {
+      const editor = __codemirror_editors[key];
+      if (!editor) return;
+
+      var newVal;
+      try {
+        newVal = JSON.parse(editor.getValue());
+      } catch (e) {
+        showMsg(key, '❌ JSON 格式错误: ' + e.message, '#c41e1e');
+        return;
+      }
+
+      __pendingSave = { ip: ip, key: key, value: newVal };
+
+      document.getElementById('modal-title').textContent = '确认保存 — ' + key;
+
+      // Diff 预览：行级 unified diff 格式
+      var oldText = __originalValues[key] || JSON.stringify(newVal, null, 2);
+      var newText = JSON.stringify(newVal, null, 2);
+
+      var diffContent = '';
+      var hasDiff = false;
+      try {
+        if (typeof diff_match_patch !== 'undefined') {
+          var dmpInstance = new diff_match_patch();
+          // 使用行模式逐行对比
+          var a = dmpInstance.diff_linesToChars_(oldText, newText);
+          var lineText1 = a.chars1;
+          var lineText2 = a.chars2;
+          var lineArray = a.lineArray;
+          var diffs = dmpInstance.diff_main(lineText1, lineText2, false);
+          dmpInstance.diff_charsToLines_(diffs, lineArray);
+
+          // 渲染行级 diff，类似 unified diff 格式
+          diffContent = '<div class="diff-container">';
+          diffContent += '<pre class="diff-pre">';
+          var oldLineNum = 1;
+          var newLineNum = 1;
+          for (var i = 0; i < diffs.length; i++) {
+            var op = diffs[i][0];
+            var lines = diffs[i][1].split('\n');
+            // 最后一项是空分隔，去掉
+            if (lines.length > 0 && lines[lines.length - 1] === '') {
+              lines.pop();
+            }
+            for (var j = 0; j < lines.length; j++) {
+              var line = lines[j];
+              if (op === 0) {
+                // 未变更行
+                diffContent += '<span class="diff-line diff-eq"> <span class="diff-ln">' +
+                  padLeft(oldLineNum, 3) + ' ' + padLeft(newLineNum, 3) + '</span> ' +
+                  escapeHtml(line) + '</span>\n';
+                oldLineNum++;
+                newLineNum++;
+              } else if (op === 1) {
+                // 新增行
+                hasDiff = true;
+                diffContent += '<span class="diff-line diff-add">+<span class="diff-ln">' +
+                  padLeft('', 3) + ' ' + padLeft(newLineNum, 3) + '</span> ' +
+                  escapeHtml(line) + '</span>\n';
+                newLineNum++;
+              } else {
+                // 删除行
+                hasDiff = true;
+                diffContent += '<span class="diff-line diff-del">-<span class="diff-ln">' +
+                  padLeft(oldLineNum, 3) + ' ' + padLeft('', 3) + '</span> ' +
+                  escapeHtml(line) + '</span>\n';
+                oldLineNum++;
+              }
+            }
+          }
+          diffContent += '</pre></div>';
+        } else {
+          diffContent = '<p style="color:#888">Diff 库未加载，显示原始 JSON</p><pre>' + escapeHtml(newText) + '</pre>';
+        }
+      } catch (e) {
+        diffContent = '<p style="color:#c41e1e">Diff 生成失败: ' + e.message + '</p>';
+      }
+
+      document.getElementById('modal-body').innerHTML = hasDiff ? diffContent : '<p style="color:#888">未检测到变更</p>';
+
+      // 保存按钮文字
+      var btn = document.getElementById('modal-confirm-btn');
+      btn.textContent = hasDiff ? '确认保存（有变更）' : '确认保存';
+
+      document.getElementById('confirm-modal').classList.add('active');
+    }
+
+    function executeSave() {
+      if (!__pendingSave) return;
+      var pending = __pendingSave;
+      __pendingSave = null;
+
+      var key = pending.key;
+      var msg = document.getElementById('msg-' + key);
+      msg.textContent = '保存中...';
+      msg.style.color = '#888';
+
+      fetch('/api/proxy/' + pending.ip + '/config/' + key, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(pending.value),
+      })
+        .then(function (r) {
+          if (!r.ok) return r.json().then(function (d) { throw new Error(d.detail || d.error || '保存失败'); });
+          return r.json();
+        })
+        .then(function () {
+          msg.textContent = '✅ 保存成功';
+          msg.style.color = '#1b7a1b';
+          // 保存当前值为原始值，用于下次 Diff
+          __originalValues[key] = JSON.stringify(pending.value, null, 2);
+          // 隐藏预览变更按钮
+          updatePreviewBtn(key);
+          closeModal();
+        })
+        .catch(function (e) {
+          msg.textContent = '❌ ' + e.message;
+          msg.style.color = '#c41e1e';
+          closeModal();
+        });
+    }
+
+    function closeModal() {
+      document.getElementById('confirm-modal').classList.remove('active');
+      __pendingSave = null;
+    }
+
+    // ── 消息提示 ──
+    function showMsg(key, text, color) {
+      var msg = document.getElementById('msg-' + key);
+      if (msg) {
+        msg.textContent = text;
+        msg.style.color = color || '#888';
+      }
+    }
+
+    // ── 全屏切换 ──
+    var __fullscreenKey = null;
+
+    function toggleFullscreen(key) {
+      const editor = __codemirror_editors[key];
+      if (!editor) return;
+      const wrapper = editor.getWrapperElement();
+      wrapper.classList.add('CodeMirror-fullscreen');
+
+      // 记录当前全屏的配置项
+      __fullscreenKey = key;
+
+      // 显示浮动工具栏
+      var toolbar = document.getElementById('fullscreen-toolbar');
+      if (toolbar) toolbar.classList.add('active');
+
+      // 更新工具栏标题
+      var ftTitle = document.getElementById('ft-title');
+      if (ftTitle) ftTitle.textContent = '全屏编辑 — ' + key;
+
+      // 刷新编辑器
+      setTimeout(function () { editor.refresh(); }, 50);
+
+      // 注册 ESC 键退出
+      document.addEventListener('keydown', __fullscreenEscHandler);
+    }
+
+    function exitFullscreen() {
+      if (!__fullscreenKey) return;
+      const editor = __codemirror_editors[__fullscreenKey];
+      if (editor) {
+        const wrapper = editor.getWrapperElement();
+        wrapper.classList.remove('CodeMirror-fullscreen');
+        setTimeout(function () { editor.refresh(); }, 50);
+      }
+
+      // 隐藏浮动工具栏
+      var toolbar = document.getElementById('fullscreen-toolbar');
+      if (toolbar) toolbar.classList.remove('active');
+
+      // 移除 ESC 监听
+      document.removeEventListener('keydown', __fullscreenEscHandler);
+      __fullscreenKey = null;
+    }
+
+    // ── ESC 键退出全屏 ──
+    function __fullscreenEscHandler(e) {
+      if (e.key === 'Escape' || e.keyCode === 27) {
+        exitFullscreen();
+      }
+    }
+
+    // ── 浮动工具栏按钮绑定 ──
+    document.addEventListener('DOMContentLoaded', function () {
+      // 保存按钮
+      document.getElementById('ft-save-btn').addEventListener('click', function () {
+        if (!__fullscreenKey) return;
+        var section = document.querySelector('.config-section[data-key="' + __fullscreenKey + '"]');
+        if (!section) return;
+        var ip = section.getAttribute('data-ip');
+        showSaveConfirm(ip, __fullscreenKey);
+      });
+
+      // 预览按钮
+      document.getElementById('ft-preview-btn').addEventListener('click', function () {
+        if (!__fullscreenKey) return;
+        var section = document.querySelector('.config-section[data-key="' + __fullscreenKey + '"]');
+        if (!section) return;
+        var ip = section.getAttribute('data-ip');
+        showSaveConfirm(ip, __fullscreenKey);
+      });
+
+      // 退出按钮
+      document.getElementById('ft-exit-btn').addEventListener('click', function () {
+        exitFullscreen();
+      });
+    });
+
+    // ── 离线重试 ──
+    async function retryConnect(ip) {
+      const btn = document.querySelector('.config-section button');
+      const msg = document.getElementById('retry-msg');
+      if (btn) btn.disabled = true;
+      msg.textContent = '正在重试...';
+      msg.style.color = '#888';
+
+      try {
+        const r = await fetch('/api/terminals');
+        const data = await r.json();
+        const terminal = data.find(function (t) { return t.ip === ip; });
+        if (terminal && terminal.online) {
+          msg.textContent = '✅ 终端已恢复在线，正在刷新页面...';
+          msg.style.color = '#1b7a1b';
+          setTimeout(function () { location.reload(); }, 1000);
+        } else {
+          msg.textContent = '❌ 终端仍离线，请检查网络或 config-serv 服务状态';
+          msg.style.color = '#c41e1e';
+          if (btn) btn.disabled = false;
+        }
+      } catch (e) {
+        msg.textContent = '❌ 请求失败: ' + e.message;
+        msg.style.color = '#c41e1e';
+        if (btn) btn.disabled = false;
+      }
+    }
+
   </script>
 </body>
 

@@ -1,127 +1,598 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>配置对比</title>
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, 'Segoe UI', sans-serif; background: #f0f2f5; color: #333; }
-  .header { background: #1a1a2e; color: #fff; padding: 16px 24px; }
-  .header h1 { font-size: 20px; }
-  .nav { display: flex; gap: 8px; padding: 12px 24px; background: #fff; border-bottom: 1px solid #e0e0e0; }
-  .nav a { text-decoration: none; color: #555; padding: 6px 14px; border-radius: 6px; font-size: 14px; }
-  .nav a:hover { background: #e8f0fe; color: #1a73e8; }
-  .nav a.active { background: #1a73e8; color: #fff; }
-  .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
-  .card { background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); padding: 24px; margin-bottom: 16px; }
-  .card h3 { font-size: 16px; margin-bottom: 12px; }
-  .checkbox-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; }
-  .checkbox-grid label { font-weight: normal; font-size: 13px; display: flex; align-items: center; gap: 6px; cursor: pointer; }
-  select { padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; min-width: 200px; }
-  .btn { padding: 10px 24px; background: #1a73e8; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; margin-top: 12px; }
-  .btn:hover { background: #1557b0; }
-  table.diff { width: 100%; border-collapse: collapse; font-size: 13px; }
-  table.diff th, table.diff td { padding: 8px 12px; border: 1px solid #e0e0e0; text-align: left; vertical-align: top; }
-  table.diff th { background: #fafafa; font-weight: 600; position: sticky; top: 0; }
-  .diff-key { font-weight: 600; color: #555; white-space: nowrap; }
-  .diff-same { color: #888; }
-  .diff-different { background: #fff3e0; }
-  .diff-val { max-width: 300px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>配置对比</title>
+  <link rel="stylesheet" href="/static/css/app.css">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, 'Segoe UI', sans-serif;
+      background: #f0f2f5;
+      color: #333;
+    }
+
+    .header {
+      background: #1a1a2e;
+      color: #fff;
+      padding: 16px 24px;
+    }
+
+    .header h1 {
+      font-size: 20px;
+    }
+
+    .nav {
+      display: flex;
+      gap: 8px;
+      padding: 12px 24px;
+      background: #fff;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    .nav a {
+      text-decoration: none;
+      color: #555;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    .nav a:hover {
+      background: #e8f0fe;
+      color: #1a73e8;
+    }
+
+    .nav a.active {
+      background: #1a73e8;
+      color: #fff;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+
+    .card h3 {
+      font-size: 16px;
+      margin-bottom: 16px;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      color: #555;
+      margin: 8px 0 4px;
+    }
+
+    select {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    .btn {
+      padding: 10px 24px;
+      background: #1a73e8;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      margin-top: 12px;
+    }
+
+    .btn:hover {
+      background: #1557b0;
+    }
+
+    /* ── 增强的对比表格 ── */
+    .compare-table-wrap {
+      overflow-x: auto;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+    }
+
+    .compare-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      font-size: 13px;
+    }
+
+    .compare-table th {
+      background: #f5f5f5;
+      padding: 10px 12px;
+      border-bottom: 2px solid #e0e0e0;
+      text-align: left;
+      font-weight: 600;
+      color: #444;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    .compare-table th:first-child {
+      width: 220px;
+      min-width: 160px;
+    }
+
+    .compare-table th:not(:first-child) {
+      width: auto;
+      min-width: 140px;
+    }
+
+    .compare-table td {
+      padding: 8px 12px;
+      border-bottom: 1px solid #f0f0f0;
+      vertical-align: top;
+      word-break: break-all;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .compare-table tr:hover td {
+      background: #fafafa;
+    }
+
+    /* ── 差异高亮强化 ── */
+    .compare-table tr.row-diff td {
+      background: #fff8e1;
+      /* 浅黄底 */
+    }
+
+    .compare-table tr.row-diff:hover td {
+      background: #fff3c4;
+      /* 悬停加深 */
+    }
+
+    .compare-table td.cell-diff {
+      background: #ffe0b2 !important;
+      /* 橙底 — 有差异的单元格 */
+      box-shadow: inset 3px 0 0 #ff9800;
+      /* 左侧橙色指示条 */
+      position: relative;
+    }
+
+    .compare-table td.cell-diff::before {
+      content: "≠";
+      position: absolute;
+      top: 4px;
+      right: 6px;
+      font-size: 10px;
+      color: #e65100;
+      font-weight: 700;
+      opacity: 0.8;
+    }
+
+    /* ── 相同值弱化 ── */
+    .compare-table tr.row-same td {
+      color: #888;
+    }
+
+    .compare-table tr.row-same td.cell-same {
+      color: #999;
+    }
+
+    /* ── 摘要统计条 ── */
+    .diff-summary {
+      display: flex;
+      gap: 16px;
+      margin: 12px 0;
+      font-size: 13px;
+    }
+
+    .diff-summary span {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .diff-summary .dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .dot.diff {
+      background: #ff9800;
+    }
+
+    .dot.same {
+      background: #ccc;
+    }
+
+    /* ── 结果导出一行 ── */
+    .export-bar {
+      display: flex;
+      gap: 8px;
+      margin-top: 16px;
+      align-items: center;
+    }
+
+    .export-bar button {
+      padding: 6px 14px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .export-bar button:hover {
+      background: #f0f4ff;
+      border-color: #1a73e8;
+    }
+
+    /* ── 终端选择 ── */
+    .terminal-checkboxes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin: 8px 0;
+    }
+
+    .terminal-checkboxes label {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-weight: normal;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    /* ── 多配置项 Tab ── */
+    .config-tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 2px solid #e0e0e0;
+      margin-bottom: 16px;
+    }
+
+    .config-tab {
+      padding: 8px 20px;
+      cursor: pointer;
+      font-size: 14px;
+      color: #888;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      user-select: none;
+    }
+
+    .config-tab:hover {
+      color: #555;
+    }
+
+    .config-tab.active {
+      color: #1a73e8;
+      border-bottom-color: #1a73e8;
+      font-weight: 600;
+    }
+
+    .compare-content {
+      display: none;
+    }
+
+    .compare-content.active {
+      display: block;
+    }
+  </style>
 </head>
+
 <body>
-<div class="header"><h1>🔍 配置对比</h1></div>
-<div class="nav">
-  <a href="/">📋 终端列表</a>
-  <a href="/batch">📦 批量操作</a>
-  <a href="/compare" class="active">🔍 配置对比</a>
-</div>
-<div class="container">
-  <div class="card">
-    <h3>选择终端</h3>
-    <div class="checkbox-grid">
-    {% for t in terminals %}
-      <label><input type="checkbox" class="term-cb" value="{{t.ip}}"> {{t.alias}} ({{t.ip}})</label>
-    {% endfor %}
+  <div class="header">
+    <h1>🔍 配置对比</h1>
+  </div>
+  <div class="nav">
+    <a href="/">📋 终端列表</a>
+    <a href="/batch">📦 批量操作</a>
+    <a href="/compare" class="active">🔍 配置对比</a>
+  </div>
+  <div class="container">
+    <div class="card">
+      <h3>🎯 选择对比终端</h3>
+      <div class="terminal-checkboxes">
+        {% for ip, alias in terminals_with_alias.items() %}
+        <label>
+          <input type="checkbox" class="term-cb" value="{{ip}}" onclick="event.stopPropagation()"
+            onchange="updateCompareBtn()">
+          {{alias}} <code style="font-size:12px;color:#888">({{ip}})</code>
+        </label>
+        {% endfor %}
+      </div>
+
+      <h3 style="margin-top:16px">⚙️ 选择对比配置项</h3>
+      <select id="config-keys" multiple style="height:120px" onchange="updateCompareBtn()">
+        <option value="serviceConfig" selected>serviceConfig — 服务配置</option>
+        <option value="terminalFunction">terminalFunction — 终端功能配置</option>
+        <option value="supervisorConfig">supervisorConfig — 监管配置</option>
+        <option value="bcConfig">bcConfig — 后台通信配置</option>
+        <option value="infoConfig">infoConfig — 信息展示配置</option>
+        <option value="webConfig">webConfig — Web 界面配置</option>
+        <option value="posterConfig">posterConfig — 海报配置</option>
+        <option value="ctcConfig">ctcConfig — CTC 对接配置</option>
+        <option value="transactionConfig">transactionConfig — 交易配置</option>
+      </select>
+      <p style="font-size:12px;color:#888;margin-top:4px">按住 Ctrl 键点击可多选配置项</p>
+
+      <button class="btn" id="compare-btn" onclick="executeCompare()" disabled>🔍 开始对比</button>
+      <div id="compare-msg" style="font-size:13px;color:#888;margin-top:8px"></div>
     </div>
-    <label style="margin-top:12px">配置项：</label>
-    <select id="config-key">
-      <option value="terminalFunction">terminalFunction</option>
-      <option value="serviceConfig">serviceConfig</option>
-      <option value="supervisorConfig">supervisorConfig</option>
-      <option value="bcConfig">bcConfig</option>
-      <option value="infoConfig">infoConfig</option>
-      <option value="webConfig">webConfig</option>
-      <option value="posterConfig">posterConfig</option>
-      <option value="ctcConfig">ctcConfig</option>
-      <option value="transactionConfig">transactionConfig</option>
-    </select>
-    <button class="btn" onclick="compare()">🔍 对比</button>
+
+    <!-- 对比结果 -->
+    <div class="card" id="result-card" style="display:none">
+      <h3>📊 对比结果</h3>
+      <div class="diff-summary" id="diff-summary"></div>
+
+      <!-- 多配置项 Tab 容器 -->
+      <div class="config-tabs" id="config-tabs"></div>
+      <div id="compare-results"></div>
+
+      <!-- 导出栏 -->
+      <div class="export-bar" id="export-bar" style="display:none">
+        <button onclick="exportCSV()">📥 导出 CSV</button>
+        <button onclick="exportMarkdown()">📥 导出 Markdown</button>
+      </div>
+    </div>
   </div>
 
-  <div id="result"></div>
-</div>
+  <script>
+    // ── 状态 ──
+    var compareData = {};
 
-<script>
-async function compare() {
-  const ips = Array.from(document.querySelectorAll('.term-cb:checked')).map(cb => cb.value);
-  if (ips.length < 2) { alert('请选择至少 2 台终端'); return; }
-  const key = document.getElementById('config-key').value;
-
-  const r = await fetch(`/api/compare?ips=${ips.join(',')}&config_key=${key}`);
-  const data = await r.json();
-
-  // 提取所有唯一键
-  const allKeys = new Set();
-  const entries = {};
-  for (const [ip, info] of Object.entries(data)) {
-    entries[ip] = { alias: info.alias, config: flatten(info.config || {}) };
-    Object.keys(entries[ip].config).forEach(k => allKeys.add(k));
-  }
-  const sortedKeys = Array.from(allKeys).sort();
-
-  let html = '<div class="card"><h3>对比结果</h3><table class="diff"><thead><tr><th>配置项</th>';
-  for (const [ip, info] of Object.entries(data)) {
-    html += `<th>${info.alias}<br><code>${ip}</code></th>`;
-  }
-  html += '</tr></thead><tbody>';
-
-  for (const key of sortedKeys) {
-    const vals = {};
-    let allSame = true;
-    let firstVal = null;
-    for (const [ip, info] of Object.entries(entries)) {
-      const v = info.config[key] !== undefined ? JSON.stringify(info.config[key]) : '—';
-      vals[ip] = v;
-      if (firstVal === null) firstVal = v;
-      else if (v !== firstVal) allSame = false;
+    // ── 按钮状态 ──
+    function updateCompareBtn() {
+      const ips = Array.from(document.querySelectorAll('.term-cb:checked')).length;
+      const keys = Array.from(document.getElementById('config-keys').selectedOptions).length;
+      document.getElementById('compare-btn').disabled = ips < 2 || keys === 0;
     }
 
-    html += `<tr class="${allSame ? '' : 'diff-different'}">`;
-    html += `<td class="diff-key">${key}</td>`;
-    for (const [ip, info] of Object.entries(entries)) {
-      html += `<td class="diff-val ${allSame ? 'diff-same' : ''}">${vals[ip]}</td>`;
-    }
-    html += '</tr>';
-  }
-  html += '</tbody></table></div>';
+    // ── 执行对比 ──
+    async function executeCompare() {
+      const ips = Array.from(document.querySelectorAll('.term-cb:checked')).map(function (cb) { return cb.value; });
+      const keys = Array.from(document.getElementById('config-keys').selectedOptions).map(function (opt) { return opt.value; });
 
-  document.getElementById('result').innerHTML = html;
-}
+      if (ips.length < 2) { alert('请至少选择 2 台终端'); return; }
+      if (keys.length === 0) { alert('请至少选择 1 个配置项'); return; }
 
-function flatten(obj, prefix = '') {
-  let result = {};
-  for (const [key, val] of Object.entries(obj)) {
-    const k = prefix ? `${prefix}.${key}` : key;
-    if (val && typeof val === 'object' && !Array.isArray(val)) {
-      Object.assign(result, flatten(val, k));
-    } else {
-      result[k] = val;
+      document.getElementById('compare-msg').textContent = '对比中...';
+
+      try {
+        // 拼接 URL：每个 ips/keys 独立 query 参数，避免被后端去重
+        const url = '/api/compare?' +
+          keys.map(function (k) { return 'keys=' + encodeURIComponent(k); }).join('&') + '&' +
+          ips.map(function (ip) { return 'ips=' + encodeURIComponent(ip); }).join('&');
+        const r = await fetch(url);
+        const data = await r.json();
+        compareData = data;
+
+        document.getElementById('result-card').style.display = 'block';
+        renderCompareResults(data, ips, keys);
+        document.getElementById('compare-msg').textContent = '✅ 对比完成';
+        document.getElementById('compare-msg').style.color = '#1b7a1b';
+      } catch (e) {
+        document.getElementById('compare-msg').textContent = '❌ 对比失败: ' + e.message;
+        document.getElementById('compare-msg').style.color = '#c41e1e';
+      }
     }
-  }
-  return result;
-}
-</script>
+
+    // ── 渲染对比结果 ──
+    function renderCompareResults(data, ips, keys) {
+      const tabContainer = document.getElementById('config-tabs');
+      const resultContainer = document.getElementById('compare-results');
+      const summaryContainer = document.getElementById('diff-summary');
+      tabContainer.innerHTML = '';
+      resultContainer.innerHTML = '';
+
+      if (keys.length === 1) {
+        // 单配置项：直接渲染
+        tabContainer.style.display = 'none';
+        renderSingleCompare(data, keys[0], ips, resultContainer, summaryContainer);
+      } else {
+        // 多配置项：Tab 切换
+        tabContainer.style.display = 'flex';
+        keys.forEach(function (key, idx) {
+          var tab = document.createElement('div');
+          tab.className = 'config-tab' + (idx === 0 ? ' active' : '');
+          tab.textContent = key;
+          tab.dataset.key = key;
+          tab.onclick = function () {
+            document.querySelectorAll('.config-tab').forEach(function (t) { t.classList.remove('active'); });
+            tab.classList.add('active');
+            document.querySelectorAll('.compare-content').forEach(function (c) { c.classList.remove('active'); });
+            var content = document.getElementById('compare-content-' + key);
+            if (content) content.classList.add('active');
+          };
+          tabContainer.appendChild(tab);
+        });
+
+        // 所有结果同时渲染，通过 display 控制可见性
+        keys.forEach(function (key, idx) {
+          var contentDiv = document.createElement('div');
+          contentDiv.id = 'compare-content-' + key;
+          contentDiv.className = 'compare-content' + (idx === 0 ? ' active' : '');
+          var singleSummary = document.createElement('div');
+          singleSummary.className = 'diff-summary';
+          renderSingleCompare(data, key, ips, contentDiv, singleSummary);
+          // 汇总用第一个配置项的数据
+          if (idx === 0) {
+            summaryContainer.innerHTML = singleSummary.innerHTML;
+          }
+          resultContainer.appendChild(contentDiv);
+        });
+      }
+
+      document.getElementById('export-bar').style.display = 'flex';
+    }
+
+    // ── 渲染单个配置项对比 ──
+    function renderSingleCompare(data, key, ips, container, summaryContainer) {
+      var keyData = data[key];
+      if (!keyData) {
+        container.innerHTML = '<p style="color:#888">配置项 ' + key + ' 无数据</p>';
+        return;
+      }
+
+      // 收集所有字段路径
+      var allFields = new Set();
+      ips.forEach(function (ip) {
+        if (keyData[ip]) {
+          Object.keys(keyData[ip].flattened || {}).forEach(function (f) { allFields.add(f); });
+        }
+      });
+      var fieldList = Array.from(allFields);
+
+      // 统计差异
+      var diffCount = 0;
+      var sameCount = 0;
+
+      var html = '<div class="compare-table-wrap"><table class="compare-table"><thead><tr><th>字段路径</th>';
+      ips.forEach(function (ip) { html += '<th>' + ip + '</th>'; });
+      html += '</tr></thead><tbody>';
+
+      fieldList.forEach(function (field) {
+        var values = {};
+        var isDiff = false;
+        var refVal = null;
+
+        ips.forEach(function (ip) {
+          var v = keyData[ip] && keyData[ip].flattened ? keyData[ip].flattened[field] : undefined;
+          var display = v === undefined ? '-' : JSON.stringify(v);
+          values[ip] = display;
+          if (refVal === null) {
+            refVal = display;
+          } else if (display !== refVal) {
+            isDiff = true;
+          }
+        });
+
+        if (isDiff) diffCount++; else sameCount++;
+
+        var rowClass = isDiff ? 'row-diff' : 'row-same';
+        html += '<tr class="' + rowClass + '">';
+        html += '<td><code>' + escapeHtml(field) + '</code></td>';
+        ips.forEach(function (ip) {
+          var cellClass = isDiff ? 'cell-diff' : 'cell-same';
+          html += '<td class="' + cellClass + '">' + escapeHtml(values[ip]) + '</td>';
+        });
+        html += '</tr>';
+      });
+
+      html += '</tbody></table></div>';
+      container.innerHTML = html;
+
+      summaryContainer.innerHTML =
+        '<span><span class="dot diff"></span> ' + diffCount + ' 项存在差异</span>' +
+        '<span><span class="dot same"></span> ' + sameCount + ' 项完全相同</span>' +
+        '<span style="margin-left:auto;color:#888">总计 ' + fieldList.length + ' 个字段</span>';
+    }
+
+    function escapeHtml(str) {
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    // ── 导出 CSV ──
+    function exportCSV() {
+      var csv = '\uFEFF'; // UTF-8 BOM for Excel
+      csv += '字段路径';
+      var ips = Array.from(document.querySelectorAll('.term-cb:checked')).map(function (cb) { return cb.value; });
+      ips.forEach(function (ip) { csv += ',' + ip; });
+      csv += '\n';
+
+      // Get current active key
+      var activeKey = document.querySelector('.config-tab.active');
+      var key = activeKey ? activeKey.dataset.key : document.getElementById('config-keys').value;
+
+      var keyData = compareData[key];
+      if (!keyData) return;
+
+      var allFields = new Set();
+      ips.forEach(function (ip) {
+        if (keyData[ip]) {
+          Object.keys(keyData[ip].flattened || {}).forEach(function (f) { allFields.add(f); });
+        }
+      });
+
+      Array.from(allFields).forEach(function (field) {
+        csv += '"' + field + '"';
+        ips.forEach(function (ip) {
+          var v = keyData[ip] && keyData[ip].flattened ? keyData[ip].flattened[field] : undefined;
+          csv += ',"' + (v === undefined ? '-' : JSON.stringify(v).replace(/"/g, '""')) + '"';
+        });
+        csv += '\n';
+      });
+
+      downloadFile(csv, 'compare-' + key + '.csv', 'text/csv;charset=utf-8');
+    }
+
+    // ── 导出 Markdown ──
+    function exportMarkdown() {
+      var md = '# 配置对比报告\n\n';
+      var ips = Array.from(document.querySelectorAll('.term-cb:checked')).map(function (cb) { return cb.value; });
+
+      var activeKey = document.querySelector('.config-tab.active');
+      var keys = activeKey ? [activeKey.dataset.key] : Array.from(document.getElementById('config-keys').selectedOptions).map(function (opt) { return opt.value; });
+
+      keys.forEach(function (key) {
+        md += '## ' + key + '\n\n';
+        md += '| 字段路径 | ' + ips.join(' | ') + ' |\n';
+        md += '|' + ips.map(function () { return '---'; }).join('|') + '|\n';
+
+        var keyData = compareData[key];
+        if (!keyData) return;
+
+        var allFields = new Set();
+        ips.forEach(function (ip) {
+          if (keyData[ip]) {
+            Object.keys(keyData[ip].flattened || {}).forEach(function (f) { allFields.add(f); });
+          }
+        });
+
+        var refVal = null;
+        Array.from(allFields).forEach(function (field) {
+          md += '| ' + field + ' ';
+          ips.forEach(function (ip) {
+            var v = keyData[ip] && keyData[ip].flattened ? keyData[ip].flattened[field] : undefined;
+            md += '| ' + (v === undefined ? '-' : JSON.stringify(v));
+          });
+          md += ' |\n';
+        });
+        md += '\n';
+      });
+
+      downloadFile(md, 'compare-report.md', 'text/markdown;charset=utf-8');
+    }
+
+    function downloadFile(content, filename, mimeType) {
+      var blob = new Blob([content], { type: mimeType });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  </script>
 </body>
+
 </html>

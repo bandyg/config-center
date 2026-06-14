@@ -33,6 +33,13 @@ def load_terminals() -> list[Terminal]:
     return terminals
 
 
+def save_terminals(terminals: list[Terminal]):
+    """保存终端列表到 YAML 文件"""
+    data = {"terminals": [{"ip": t.ip, "alias": t.alias, "group": t.group, "port": t.port} for t in terminals]}
+    with open(TERMINALS_FILE, "w", encoding="utf-8") as f:
+        yaml.dump(data, f, allow_unicode=True, default_flow_style=False)
+
+
 def get_terminal_groups(terminals: list[Terminal]) -> list[str]:
     """获取所有分组名"""
     groups = set()

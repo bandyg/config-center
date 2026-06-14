@@ -1,5 +1,5 @@
 schema: spec-driven
 name: kiosk-config-center
 created: 2026-06-10
-status: planning
+status: in_progress
 description: Kiosk 配置管理中心 — 集中查看/管理所有投注终端的配置
