@@ -18,8 +18,10 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/search/searchcursor.min.js"></script>
   <!-- diff-match-patch (CDN) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/diff_match_patch/20121119/diff_match_patch.js"></script>
+  <script src="/static/loading.js"></script>
   <!-- 项目自定义样式 -->
   <link rel="stylesheet" href="/static/css/app.css">
+  <link rel="stylesheet" href="/static/loading.css">
   <style>
     * {
       margin: 0;
@@ -34,16 +36,46 @@
     }
 
     .header {
-      background: #1a1a2e;
-      color: #fff;
-      padding: 16px 24px;
       display: flex;
       align-items: center;
-      gap: 12px;
+      justify-content: space-between;
+      padding: 16px 24px;
+      background: linear-gradient(135deg, #1a73e8 0%, #1557b0 100%);
+      color: #fff;
     }
 
     .header h1 {
-      font-size: 18px;
+      margin: 0;
+      font-size: 22px;
+      font-weight: 600;
+    }
+
+    .header h1 small {
+      font-size: 13px;
+      font-weight: 400;
+      opacity: 0.8;
+      margin-left: 8px;
+    }
+
+    .header .header-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .header .btn-shutdown {
+      padding: 8px 18px;
+      background: rgba(255, 255, 255, 0.15);
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+
+    .header .btn-shutdown:hover {
+      background: rgba(196, 30, 30, 0.9);
+      border-color: #c41e1e;
     }
 
     .header a {
@@ -437,8 +469,13 @@
 
 <body>
   <div class="header">
-    <a href="/">← 返回</a>
-    <h1>{{terminal.alias}}</h1>
+    <h1>🖥 {{terminal.alias}} <small>{{terminal.ip}}</small></h1>
+    <div class="header-actions">
+      <a href="/"
+        style="color:#fff;text-decoration:none;padding:8px 18px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.4);border-radius:6px;font-size:14px">←
+        返回列表</a>
+      <button class="btn-shutdown" onclick="confirmShutdown()" title="关闭 Kiosk Config Center 服务">🛑 关闭服务</button>
+    </div>
   </div>
   <div class="container">
     <div class="info-bar">
@@ -834,6 +871,7 @@
       msg.textContent = '保存中...';
       msg.style.color = '#888';
 
+      Loading.start();
       fetch('/api/proxy/' + pending.ip + '/config/' + key, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -844,6 +882,7 @@
           return r.json();
         })
         .then(function () {
+          Loading.done();
           msg.textContent = '✅ 保存成功';
           msg.style.color = '#1b7a1b';
           // 保存当前值为原始值，用于下次 Diff
@@ -853,6 +892,7 @@
           closeModal();
         })
         .catch(function (e) {
+          Loading.error('保存失败: ' + e.message);
           msg.textContent = '❌ ' + e.message;
           msg.style.color = '#c41e1e';
           closeModal();
@@ -960,7 +1000,7 @@
       msg.style.color = '#888';
 
       try {
-        const r = await fetch('/api/terminals');
+        const r = await Loading.track(fetch('/api/terminals'));
         const data = await r.json();
         const terminal = data.find(function (t) { return t.ip === ip; });
         if (terminal && terminal.online) {
@@ -979,6 +1019,21 @@
       }
     }
 
+    // ── 关闭服务 ──
+    function confirmShutdown() {
+      if (!confirm('确定要关闭 Kiosk Config Center 服务吗？\n\n关闭后需手动重新启动 EXE 才能继续使用。')) {
+        return;
+      }
+      const overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;color:#fff;font-size:18px';
+      overlay.innerHTML = '<div style="font-size:64px;margin-bottom:20px">🛑</div>' +
+        '<div>服务正在关闭...</div>' +
+        '<div style="font-size:13px;color:#aaa;margin-top:10px">2 秒后此页面会断开连接，请重新启动 EXE</div>';
+      document.body.appendChild(overlay);
+      fetch('/api/shutdown', { method: 'POST' })
+        .then(function (r) { return r.json(); })
+        .catch(function () { });
+    }
   </script>
 </body>
 

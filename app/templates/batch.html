@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>批量操作</title>
   <link rel="stylesheet" href="/static/css/app.css">
+  <link rel="stylesheet" href="/static/loading.css">
   <style>
     * {
       margin: 0;
@@ -20,13 +21,46 @@
     }
 
     .header {
-      background: #1a1a2e;
-      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
       padding: 16px 24px;
+      background: linear-gradient(135deg, #1a73e8 0%, #1557b0 100%);
+      color: #fff;
     }
 
     .header h1 {
-      font-size: 20px;
+      margin: 0;
+      font-size: 22px;
+      font-weight: 600;
+    }
+
+    .header h1 small {
+      font-size: 13px;
+      font-weight: 400;
+      opacity: 0.8;
+      margin-left: 8px;
+    }
+
+    .header .header-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .header .btn-shutdown {
+      padding: 8px 18px;
+      background: rgba(255, 255, 255, 0.15);
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+
+    .header .btn-shutdown:hover {
+      background: rgba(196, 30, 30, 0.9);
+      border-color: #c41e1e;
     }
 
     .nav {
@@ -383,7 +417,10 @@
 
 <body>
   <div class="header">
-    <h1>📦 批量配置操作</h1>
+    <h1>📦 批量配置操作 <small>Kiosk Config Center v1.0</small></h1>
+    <div class="header-actions">
+      <button class="btn-shutdown" onclick="confirmShutdown()" title="关闭 Kiosk Config Center 服务">🛑 关闭服务</button>
+    </div>
   </div>
   <div class="nav">
     <a href="/">📋 终端列表</a>
@@ -485,6 +522,7 @@
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/diff_match_patch/20121119/diff_match_patch.js"></script>
+  <script src="/static/loading.js"></script>
   <script>
     // ── 终端在线状态检测 ──
     document.addEventListener('DOMContentLoaded', function () {
@@ -493,7 +531,7 @@
 
     async function refreshOnlineStatus() {
       try {
-        const r = await fetch('/api/terminals');
+        const r = await Loading.track(fetch('/api/terminals'));
         const data = await r.json();
         let onlineCount = 0;
         for (const t of data) {
@@ -643,7 +681,7 @@
       hint.style.color = '#888';
 
       try {
-        const r = await fetch('/api/proxy/' + ip + '/config/' + key);
+        const r = await Loading.track(fetch('/api/proxy/' + ip + '/config/' + key));
         const data = await r.json();
         if (data.error) {
           ta.value = '';
@@ -697,7 +735,7 @@
       // 拉取首台终端的当前值
       let oldVal = {};
       try {
-        const r = await fetch('/api/proxy/' + firstIP + '/config/' + key);
+        const r = await Loading.track(fetch('/api/proxy/' + firstIP + '/config/' + key));
         const data = await r.json();
         if (!data.error) oldVal = data;
       } catch (e) {
@@ -815,6 +853,7 @@
       resultCard.style.display = 'block';
       document.getElementById('progress-text').textContent = '推送中 0/' + pending.ips.length + '...';
 
+      Loading.start();
       const startTime = Date.now();
 
       fetch('/api/batch', {
@@ -824,6 +863,7 @@
       })
         .then(function (r) { return r.json(); })
         .then(function (data) {
+          Loading.done();
           const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
           document.getElementById('progress-fill').style.width = '100%';
           document.getElementById('progress-text').textContent = '完成 (' + elapsed + 's)';
@@ -845,6 +885,7 @@
           btn.textContent = '🚀 推送到选中终端';
         })
         .catch(function (e) {
+          Loading.error('请求失败: ' + e.message);
           document.getElementById('progress-text').textContent = '❌ 请求失败: ' + e.message;
           btn.disabled = false;
           btn.textContent = '🚀 推送到选中终端';
@@ -854,6 +895,22 @@
     function closeModal() {
       document.getElementById('confirm-modal').classList.remove('active');
       window.__pendingBatch = null;
+    }
+
+    // ── 关闭服务 ──
+    function confirmShutdown() {
+      if (!confirm('确定要关闭 Kiosk Config Center 服务吗？\n\n关闭后需手动重新启动 EXE 才能继续使用。')) {
+        return;
+      }
+      const overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;color:#fff;font-size:18px';
+      overlay.innerHTML = '<div style="font-size:64px;margin-bottom:20px">🛑</div>' +
+        '<div>服务正在关闭...</div>' +
+        '<div style="font-size:13px;color:#aaa;margin-top:10px">2 秒后此页面会断开连接，请重新启动 EXE</div>';
+      document.body.appendChild(overlay);
+      fetch('/api/shutdown', { method: 'POST' })
+        .then(function (r) { return r.json(); })
+        .catch(function () { });
     }
   </script>
 </body>

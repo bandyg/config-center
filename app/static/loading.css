@@ -1,0 +1,84 @@
+/* Kiosk Loading Overlay */
+#kiosk-loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+  z-index: 99999;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+
+#kiosk-loading-overlay[data-state="loading"],
+#kiosk-loading-overlay[data-state="error"] {
+  display: flex;
+}
+
+.kiosk-loading-box {
+  background: #fff;
+  border-radius: 12px;
+  padding: 28px 40px;
+  min-width: 280px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.kiosk-loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid #e0e7ef;
+  border-top-color: #1a73e8;
+  border-radius: 50%;
+  animation: kiosk-spin 0.9s linear infinite;
+}
+
+@keyframes kiosk-spin {
+  to { transform: rotate(360deg); }
+}
+
+.kiosk-loading-text {
+  color: #333;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.kiosk-loading-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.kiosk-loading-error-icon {
+  font-size: 36px;
+}
+
+.kiosk-loading-error-msg {
+  color: #c41e1e;
+  font-size: 14px;
+  text-align: center;
+  max-width: 360px;
+  word-break: break-word;
+}
+
+.kiosk-loading-retry {
+  background: #1a73e8;
+  color: #fff;
+  border: 0;
+  border-radius: 6px;
+  padding: 8px 24px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.kiosk-loading-retry:hover {
+  background: #1557b0;
+}

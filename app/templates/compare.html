@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>配置对比</title>
   <link rel="stylesheet" href="/static/css/app.css">
+  <link rel="stylesheet" href="/static/loading.css">
   <style>
     * {
       margin: 0;
@@ -20,13 +21,46 @@
     }
 
     .header {
-      background: #1a1a2e;
-      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
       padding: 16px 24px;
+      background: linear-gradient(135deg, #1a73e8 0%, #1557b0 100%);
+      color: #fff;
     }
 
     .header h1 {
-      font-size: 20px;
+      margin: 0;
+      font-size: 22px;
+      font-weight: 600;
+    }
+
+    .header h1 small {
+      font-size: 13px;
+      font-weight: 400;
+      opacity: 0.8;
+      margin-left: 8px;
+    }
+
+    .header .header-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .header .btn-shutdown {
+      padding: 8px 18px;
+      background: rgba(255, 255, 255, 0.15);
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+
+    .header .btn-shutdown:hover {
+      background: rgba(196, 30, 30, 0.9);
+      border-color: #c41e1e;
     }
 
     .nav {
@@ -301,7 +335,10 @@
 
 <body>
   <div class="header">
-    <h1>🔍 配置对比</h1>
+    <h1>🔍 配置对比 <small>Kiosk Config Center v1.0</small></h1>
+    <div class="header-actions">
+      <button class="btn-shutdown" onclick="confirmShutdown()" title="关闭 Kiosk Config Center 服务">🛑 关闭服务</button>
+    </div>
   </div>
   <div class="nav">
     <a href="/">📋 终端列表</a>
@@ -356,6 +393,7 @@
     </div>
   </div>
 
+  <script src="/static/loading.js"></script>
   <script>
     // ── 状态 ──
     var compareData = {};
@@ -382,7 +420,7 @@
         const url = '/api/compare?' +
           keys.map(function (k) { return 'keys=' + encodeURIComponent(k); }).join('&') + '&' +
           ips.map(function (ip) { return 'ips=' + encodeURIComponent(ip); }).join('&');
-        const r = await fetch(url);
+        const r = await Loading.track(fetch(url));
         const data = await r.json();
         compareData = data;
 
@@ -591,6 +629,22 @@
       a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
+    }
+
+    // ── 关闭服务 ──
+    function confirmShutdown() {
+      if (!confirm('确定要关闭 Kiosk Config Center 服务吗？\n\n关闭后需手动重新启动 EXE 才能继续使用。')) {
+        return;
+      }
+      const overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;color:#fff;font-size:18px';
+      overlay.innerHTML = '<div style="font-size:64px;margin-bottom:20px">🛑</div>' +
+        '<div>服务正在关闭...</div>' +
+        '<div style="font-size:13px;color:#aaa;margin-top:10px">2 秒后此页面会断开连接，请重新启动 EXE</div>';
+      document.body.appendChild(overlay);
+      fetch('/api/shutdown', { method: 'POST' })
+        .then(function (r) { return r.json(); })
+        .catch(function () { });
     }
   </script>
 </body>

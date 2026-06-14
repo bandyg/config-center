@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Kiosk 配置管理中心</title>
   <link rel="stylesheet" href="/static/css/app.css">
+  <link rel="stylesheet" href="/static/loading.css">
   <style>
     * {
       margin: 0;
@@ -618,12 +619,59 @@
       font-size: 12px;
       white-space: nowrap;
     }
+
+    /* ── Header (标题 + 右上角关闭按钮) ── */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 24px;
+      background: linear-gradient(135deg, #1a73e8 0%, #1557b0 100%);
+      color: #fff;
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: 22px;
+      font-weight: 600;
+    }
+
+    .header h1 small {
+      font-size: 13px;
+      font-weight: 400;
+      opacity: 0.8;
+      margin-left: 8px;
+    }
+
+    .header .header-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .header .btn-shutdown {
+      padding: 8px 18px;
+      background: rgba(255, 255, 255, 0.15);
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+
+    .header .btn-shutdown:hover {
+      background: rgba(196, 30, 30, 0.9);
+      border-color: #c41e1e;
+    }
   </style>
 </head>
 
 <body>
   <div class="header">
     <h1>🖥 Kiosk 配置管理中心 <small>Config Center v1.0</small></h1>
+    <div class="header-actions">
+      <button class="btn-shutdown" onclick="confirmShutdown()" title="关闭 Kiosk Config Center 服务">🛑 关闭服务</button>
+    </div>
   </div>
   <div class="nav">
     <a href="/" class="active">📋 终端列表</a>
@@ -831,6 +879,7 @@
     </div>
   </div>
 
+  <script src="/static/loading.js"></script>
   <script>
     function showPageLoading() {
       document.getElementById('page-loading').classList.add('active');
@@ -842,7 +891,7 @@
       btn.textContent = '刷新中...';
       btn.disabled = true;
       try {
-        const r = await fetch('/api/terminals');
+        const r = await Loading.track(fetch('/api/terminals'));
         const data = await r.json();
         const tbody = document.getElementById('terminal-tbody');
         const knownIps = new Set();
@@ -921,7 +970,7 @@
       msg.style.display = 'none';
 
       try {
-        const r = await fetch('/api/terminals/add', {
+        const r = await Loading.track(fetch('/api/terminals/add', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -996,7 +1045,7 @@
       document.getElementById('scan-batch-area').style.display = 'none';
 
       try {
-        const r = await fetch('/api/terminals/scan', {
+        const r = await Loading.track(fetch('/api/terminals/scan', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1017,7 +1066,7 @@
         // 轮询进度
         var pollTimer = setInterval(async function () {
           try {
-            const pr = await fetch('/api/terminals/scan/progress');
+            const pr = await Loading.track(fetch('/api/terminals/scan/progress'));
             const p = await pr.json();
 
             var pct = p.total > 0 ? Math.round(p.done / p.total * 100) : 0;
@@ -1076,10 +1125,10 @@
       btn.textContent = '添加中...';
 
       try {
-        const pr = await fetch('/api/terminals/scan/progress');
+        const pr = await Loading.track(fetch('/api/terminals/scan/progress'));
         const p = await pr.json();
 
-        const r = await fetch('/api/terminals/scan/batch-add', {
+        const r = await Loading.track(fetch('/api/terminals/scan/batch-add', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ hosts: p.found || [] }),
@@ -1109,6 +1158,27 @@
     }
 
     document.getElementById('refresh-time').textContent = '页面加载: ' + new Date().toLocaleTimeString();
+
+    // ── 关闭服务 ──
+    function confirmShutdown() {
+      if (!confirm('确定要关闭 Kiosk Config Center 服务吗？\n\n关闭后需手动重新启动 EXE 才能继续使用。')) {
+        return;
+      }
+      // 显示全屏遮罩
+      const overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;color:#fff;font-size:18px';
+      overlay.innerHTML = '<div style="font-size:64px;margin-bottom:20px">🛑</div>' +
+        '<div>服务正在关闭...</div>' +
+        '<div style="font-size:13px;color:#aaa;margin-top:10px">2 秒后此页面会断开连接，请重新启动 EXE</div>';
+      document.body.appendChild(overlay);
+
+      fetch('/api/shutdown', { method: 'POST' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) { console.log('shutdown:', d); })
+        .catch(function (e) {
+          console.log('shutdown request done (server may have closed)');
+        });
+    }
 
     // ── 信息提示图标 ──
     document.getElementById('info-cidr').addEventListener('click', function (e) {

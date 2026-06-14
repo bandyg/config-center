@@ -39,7 +39,7 @@
 | 组件 | 技术 | 位置 | 作用 |
 |------|------|------|------|
 | **Config Center** (本项目) | Python FastAPI | `~/services/kiosk-config-center/` | 集中管理面板 + 代理层 |
-| **config-serv** | TypeScript/Node.js | `~/services/new_projects/old_one/config-serv/` | 每台终端上运行的实际配置服务 |
+| **config-serv** | TypeScript/Node.js | 每台终端上运行 | 实际配置服务（Config Center 通过 HTTP 代理读写） |
 | **kiosk-next** | Angular + Electron | `~/services/kiosk-next/` | Electron 客户端（另一项目） |
 
 > Config Center 是 **代理/管理面板**，本身不存储配置。配置读写都代理到各终端的 config-serv。
@@ -73,13 +73,18 @@ python run.py
 kiosk-config-center/
 ├── app/
 │   ├── main.py              # FastAPI 主入口（API + 页面路由）
-│   ├── proxy.py             # httpx 代理层（转发到 config-serv）
+│   ├── proxy.py             # httpx 代理层（转发到 config-serv，含重试机制）
 │   ├── terminals.py         # YAML 终端列表加载
+│   ├── history.py           # 配置修改历史记录与回滚管理
+│   ├── static/
+│   │   ├── css/app.css      # 增强 UI 样式（树形浏览、Diff 着色、骨架屏等）
+│   │   └── js/app.js        # 前端工具函数（预留）
 │   ├── templates/
-│   │   ├── index.html       # 终端列表仪表盘
-│   │   ├── terminal.html    # 配置详情 + 在线编辑
-│   │   ├── batch.html       # 批量操作
-│   │   └── compare.html     # 配置对比
+│   │   ├── index.html       # 终端列表仪表盘（含健康度、分页）
+│   │   ├── terminal.html    # 配置详情（CodeMirror 编辑器、树形浏览、Diff 预览）
+│   │   ├── batch.html       # 批量操作（分组筛选、进度条、结果增强）
+│   │   ├── compare.html     # 配置对比（多配置项 Tab、CSV/Markdown 导出）
+│   │   └── test.html        # 基础验证页
 │   └── __init__.py
 ├── run.py                   # 启动入口（PyInstaller 兼容）
 ├── terminals.yaml           # 终端配置文件
@@ -89,7 +94,16 @@ kiosk-config-center/
 │   └── build-exe.yml        # GitHub Actions → 自动打包 Windows EXE
 ├── kiosk-config-center.spec # PyInstaller 打包配置
 ├── build-windows.bat        # Windows 本地打包脚本
-└── openspec/                # 项目文档（设计稿、任务）
+├── docs/
+│   ├── 用户操作手册.md       # 面向最终用户的操作指南
+│   ├── 测试说明文档.md       # 面向测试人员的全面测试用例
+│   ├── PM-需求评审材料.md    # 产品经理评审材料
+│   ├── 项目PR方案.md         # 项目 PR 方案与迭代规划
+│   └── 项目实现计划.md       # 完整 WBS 任务分解与甘特图
+├── scripts/
+│   ├── install-service.ps1  # Windows 服务安装/卸载脚本
+│   └── download-static-assets.ps1  # CDN 资源离线下载脚本
+└── openspec/                # OpenSpec 项目文档
 ```
 
 ---
@@ -101,9 +115,12 @@ kiosk-config-center/
 | `GET` | `/api/terminals` | 终端列表（含在线状态 + 配置版本号） |
 | `GET` | `/api/proxy/{ip}/config` | 获取终端全部配置 |
 | `GET` | `/api/proxy/{ip}/config/{key}` | 获取指定配置项 |
-| `PUT` | `/api/proxy/{ip}/config/{key}` | 写入指定配置项 |
-| `POST` | `/api/batch` | 批量写入（支持 ips/groups） |
-| `GET` | `/api/compare` | 多终端配置对比 |
+| `PUT` | `/api/proxy/{ip}/config/{key}` | 写入指定配置项（自动记录修改历史） |
+| `POST` | `/api/batch` | 批量写入（支持 ips/groups，自动记录历史） |
+| `GET` | `/api/compare` | 多终端配置对比（支持多配置项） |
+| `GET` | `/api/history/{ip}/{key}` | 获取配置修改历史记录 |
+| `POST` | `/api/rollback/{ip}/{key}` | 回滚配置到历史版本 |
+| `GET` | `/api/health` | 获取各终端健康度评分 |
 
 ### 批量写入示例
 
@@ -123,7 +140,19 @@ POST /api/batch
 ### 对比示例
 
 ```
-GET /api/compare?ips=10.0.0.1,10.0.0.2&config_key=terminalFunction
+GET /api/compare?ips=10.0.0.1,10.0.0.2&keys=terminalFunction,serviceConfig
+```
+
+### 配置历史示例
+
+```
+GET /api/history/10.0.0.1/serviceConfig
+```
+
+### 健康度示例
+
+```
+GET /api/health
 ```
 
 ---

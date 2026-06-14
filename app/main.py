@@ -546,3 +546,34 @@ async def compare_page(request: Request):
             "terminals_with_alias": terminals_with_alias,
         },
     )
+
+
+# ── 优雅关闭服务（供 web UI 调用）──
+import os
+import sys
+import threading
+
+
+@app.post("/api/shutdown")
+async def api_shutdown():
+    """优雅关闭 uvicorn 服务（用于 Web UI 关闭按钮）"""
+    def _shutdown():
+        import time
+        time.sleep(0.3)  # 留时间让响应返回
+        # PyInstaller 打包后 SIGINT 在 Windows 上不工作，直接强制退出
+        # 开发模式（python run.py）下也会触发 KeyboardInterrupt 让 uvicorn 优雅停止
+        def _force_exit():
+            time.sleep(0.5)
+            # 同时关掉控制台窗口（PyInstaller 打包时）— 找父 cmd.exe
+            try:
+                import subprocess
+                subprocess.Popen(
+                    ['taskkill', '/F', '/FI', f'PID eq {os.getpid()}', '/T'],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
+            except Exception:
+                pass
+            os._exit(0)
+        threading.Thread(target=_force_exit, daemon=True).start()
+    threading.Thread(target=_shutdown, daemon=True).start()
+    return {"status": "ok", "message": "服务正在关闭，请重新启动 EXE 以再次使用"}
