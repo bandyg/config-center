@@ -1,0 +1,56 @@
+name: Build Windows EXE
+
+# 只在推送 v* 标签时触发
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write   # 允许创建 Release
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build EXE
+        shell: powershell
+        run: |
+          # 用项目自带的 PowerShell 脚本打包
+          powershell -ExecutionPolicy Bypass -File ./build-windows.ps1
+
+      - name: Verify EXE
+        shell: powershell
+        run: |
+          if (-not (Test-Path "dist\KioskConfigCenter.exe")) {
+            Write-Error "EXE not found!"
+            exit 1
+          }
+          $size = (Get-Item "dist\KioskConfigCenter.exe").Length / 1MB
+          Write-Host "EXE size: $size MB"
+
+      - name: Extract version from tag
+        id: version
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: 'Kiosk Config Center v${{ steps.version.outputs.VERSION }}'
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            dist/KioskConfigCenter.exe
