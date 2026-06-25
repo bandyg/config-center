@@ -1,0 +1,13 @@
+# Kiosk Config Center — DC 模式配置
+# 此文件仅在 KIOSK_MODE=dc 时使用
+mode: dc
+branches:
+  - id: sz
+    name: 深圳分行
+    url: http://10.66.1.100:8300
+  - id: bj
+    name: 北京分行
+    url: http://10.66.2.100:8300
+  - id: sh
+    name: 上海分行
+    url: http://10.66.3.100:8300
