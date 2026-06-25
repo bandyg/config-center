@@ -47,17 +47,17 @@
 
 > **目标**：DC 模式下的数据访问实现，通过 BC API 代理访问终端
 
-- [ ] **T3.1** 在 `app/accessor.py` 中实现 `BcProxyAccessor` 类
+- [x] **T3.1** 在 `app/accessor.py` 中实现 `BcProxyAccessor` 类
   - 构造函数接收 `BcRegistry` 实例
   - `fetch_config(ip, port, key)` → `GET {bc_url}/api/proxy/{ip}/config/{key}`（不传 port）
   - `write_config(ip, port, key, data)` → `PUT {bc_url}/api/proxy/{ip}/config/{key}`
   - `fetch_all_configs(ip, port)` → `GET {bc_url}/api/proxy/{ip}/config`
   - `check_online(ip, port)` → 从 BcRegistry 缓存查询
-- [ ] **T3.2** 添加超时和错误处理
+- [x] **T3.2** 添加超时和错误处理
   - BC 连接超时 10s（比直连 terminal 长，因为多一层代理）
   - BC 返回非 200 时透传错误信息
   - BC 离线时返回 `{"error": "BC server offline", "branch": "..."}`
-- [ ] **T3.3** 验证：本地启动两个 BC 模式实例 + 一个 DC 模式实例，确认代理链路正常
+- [x] **T3.3** 验证：本地启动两个 BC 模式实例 + 一个 DC 模式实例，确认代理链路正常
 
 ## Phase 4: 启动入口与模式切换
 
