@@ -28,22 +28,43 @@ app = FastAPI(title="Kiosk Config Center", version="1.0.0")
 # ─── 依赖注入 ────────────────────────────────────────
 
 _accessor: TerminalAccessor = DirectAccessor()
+_bc_registry = None  # DC 模式下持有 BcRegistry 引用
+_mode: str = "bc"
 
 
 def init_app(mode: str = "bc"):
     """初始化应用（启动时调用一次，注入对应模式的 accessor）"""
-    global _accessor
+    global _accessor, _bc_registry, _mode
+    _mode = mode
     if mode == "dc":
         from app.bc_registry import BcRegistry
         from app.accessor import BcProxyAccessor
-        bc_registry = BcRegistry()
-        _accessor = BcProxyAccessor(bc_registry)
+        _bc_registry = BcRegistry()
+        _accessor = BcProxyAccessor(_bc_registry)
+        # 首次预热 + 启动后台定时刷新
+        async def _warmup():
+            try:
+                await _bc_registry.refresh_all()
+            except Exception:
+                pass
+            _bc_registry.start_background_refresh()
+        import asyncio as _asyncio
+        try:
+            loop = _asyncio.get_running_loop()
+            loop.create_task(_warmup())
+        except RuntimeError:
+            pass
     else:
         _accessor = DirectAccessor()
+        _bc_registry = None
 
 
 def get_accessor() -> TerminalAccessor:
     return _accessor
+
+
+def get_mode() -> str:
+    return _mode
 
 # Jinja2 模板 + 静态文件（兼容 PyInstaller 打包路径）
 import os
@@ -62,6 +83,9 @@ if static_dir.exists():
 @app.get("/api/terminals")
 async def api_terminals(accessor: TerminalAccessor = Depends(get_accessor)):
     """返回终端列表（含在线状态）"""
+    if get_mode() == "dc" and _bc_registry is not None:
+        return _bc_registry.get_terminals()
+
     terminals = load_terminals()
     result = []
     for t in terminals:
@@ -84,7 +108,12 @@ async def api_terminals(accessor: TerminalAccessor = Depends(get_accessor)):
 
 @app.post("/api/terminals/add")
 async def api_terminals_add(request: Request, accessor: TerminalAccessor = Depends(get_accessor)):
-    """添加新的终端（校验 IP 有效性 → 检测在线 → 写入 YAML）"""
+    """添加新的终端（校验 IP 有效性 → 检测在线 → 写入 YAML）
+
+    DC 模式不支持此操作（终端归属由各 BC 自行管理）。
+    """
+    if get_mode() == "dc":
+        return {"status": "error", "error": "DC 模式不支持添加终端，请在对应 BC Server 上操作"}
     import traceback
     try:
         body = await request.json()
@@ -140,7 +169,12 @@ def _cidr_to_ips(cidr: str):
 
 @app.post("/api/terminals/scan")
 async def api_terminals_scan(request: Request):
-    """扫描子网内开放指定端口的终端"""
+    """扫描子网内开放指定端口的终端
+
+    DC 模式不支持此操作（扫描由各 BC 自行执行）。
+    """
+    if get_mode() == "dc":
+        return {"status": "error", "error": "DC 模式不支持扫描子网，请在对应 BC Server 上操作"}
     global _scan_progress
     body = await request.json()
     cidr = body.get("cidr", "").strip()
@@ -284,6 +318,49 @@ async def api_batch(request: Request, accessor: TerminalAccessor = Depends(get_a
     ips = set(targets.get("ips", []))
     groups = set(targets.get("groups", []))
 
+    if get_mode() == "dc" and _bc_registry is not None:
+        # DC 模式：从 BcRegistry 匹配终端，按 BC 分组推送
+        all_terms = _bc_registry.get_terminals()
+        matched = []
+        for t in all_terms:
+            if t["ip"] in ips:
+                matched.append(t)
+            elif t.get("branch_name", t.get("group", "")) in groups:
+                matched.append(t)
+
+        # 按 BC URL 分组
+        bc_groups: dict[str, list[dict]] = {}
+        for t in matched:
+            bc_url = t.get("bc_url", "")
+            if bc_url not in bc_groups:
+                bc_groups[bc_url] = []
+            bc_groups[bc_url].append(t)
+
+        results = []
+        async def _push_to_bc(bc_url, terminals):
+            try:
+                async with httpx.AsyncClient(timeout=10) as client:
+                    r = await client.post(
+                        f"{bc_url}/api/batch",
+                        json={"targets": {"ips": [t["ip"] for t in terminals]}, "configs": configs},
+                    )
+                    if r.status_code == 200:
+                        data = r.json()
+                        return data.get("results", [])
+            except Exception:
+                pass
+            return [{"ip": t["ip"], "alias": t.get("alias", ""), "config": k,
+                     "status": "error", "error": "BC 请求失败"}
+                    for t in terminals for k in configs]
+
+        tasks = [_push_to_bc(url, terms) for url, terms in bc_groups.items()]
+        batch_results = await asyncio.gather(*tasks)
+        for br in batch_results:
+            results.extend(br)
+
+        return {"total": len(matched), "results": results}
+
+    # BC 模式：原始逻辑
     terminals = load_terminals()
     matched = []
     for t in terminals:
@@ -460,6 +537,44 @@ async def api_health(accessor: TerminalAccessor = Depends(get_accessor)):
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request, page: int = 1, page_size: int = 20, accessor: TerminalAccessor = Depends(get_accessor)):
     """终端列表首页（SSR 直接输出在线状态，支持分页与健康度）"""
+    mode = get_mode()
+
+    if mode == "dc" and _bc_registry is not None:
+        # DC 模式：从 BcRegistry 缓存加载（BC 已检测在线状态）
+        all_terminals = _bc_registry.get_terminals()
+        groups = sorted(set(t.get("branch_name", t.get("group", "")) for t in all_terminals))
+        online_count = sum(1 for t in all_terminals if t.get("online"))
+        status_map = {t["ip"]: t for t in all_terminals}
+        health_map = {}
+        for t in all_terminals:
+            health_map[t["ip"]] = {"score": 80 if t.get("online") else 0,
+                                    "issues": [] if t.get("online") else ["离线"]}
+
+        total = len(all_terminals)
+        total_pages = max(1, (total + page_size - 1) // page_size)
+        page = max(1, min(page, total_pages))
+        start = (page - 1) * page_size
+        end = start + page_size
+        paged_terminals = all_terminals[start:end]
+
+        return templates.TemplateResponse(
+            request, "index.html",
+            {
+                "terminals": paged_terminals,
+                "all_terminals": all_terminals,
+                "groups": groups,
+                "status_map": status_map,
+                "health_map": health_map,
+                "online_count": online_count,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": total_pages,
+                "total": total,
+                "mode": "dc",
+            },
+        )
+
+    # BC 模式：原始逻辑
     terminals_raw = load_terminals()
     groups = get_terminal_groups(terminals_raw)
     
@@ -518,6 +633,7 @@ async def index(request: Request, page: int = 1, page_size: int = 20, accessor: 
             "page_size": page_size,
             "total_pages": total_pages,
             "total": total,
+            "mode": "bc",
         },
     )
 

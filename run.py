@@ -94,7 +94,13 @@ def main():
         threading.Thread(target=_open_browser, daemon=True).start()
 
     try:
-        from app.main import app as fastapi_app  # noqa: F401
+        from app.main import app as fastapi_app, init_app  # noqa: F401
+        mode = os.getenv("KIOSK_MODE", "bc")
+        if mode not in ("bc", "dc"):
+            print(f"⚠  WARNING: unknown KIOSK_MODE='{mode}', falling back to 'bc'")
+            mode = "bc"
+        init_app(mode)
+        print(f"🔧 Mode: {mode.upper()}", flush=True)
         import uvicorn
         uvicorn.run(
             fastapi_app,
