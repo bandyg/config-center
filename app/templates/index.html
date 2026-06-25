@@ -706,10 +706,12 @@
         style="padding:8px 16px;background:#1a73e8;color:#fff;border:none;border-radius:6px;cursor:pointer">🔄
         刷新</button>
       <button onclick="openAddModal()"
-        style="padding:8px 16px;background:#fff;color:#333;border:1px solid #ddd;border-radius:6px;cursor:pointer">➕
+        style="padding:8px 16px;background:#fff;color:#333;border:1px solid #ddd;border-radius:6px;cursor:pointer"
+        id="btn-add-terminal">➕
         添加终端</button>
       <button onclick="openScanModal()"
-        style="padding:8px 16px;background:#fff;color:#333;border:1px solid #ddd;border-radius:6px;cursor:pointer">🔍
+        style="padding:8px 16px;background:#fff;color:#333;border:1px solid #ddd;border-radius:6px;cursor:pointer"
+        id="btn-scan-subnet">🔍
         扫描子网</button>
       <span class="last-refresh" id="refresh-time"></span>
     </div>
@@ -721,6 +723,9 @@
           <th>别名</th>
           <th>IP</th>
           <th>分组</th>
+          {% if mode == 'dc' %}
+          <th>分支</th>
+          {% endif %}
           <th>健康度</th>
           <th>配置版本</th>
           <th>操作</th>
@@ -743,7 +748,17 @@
           <td><strong>{{t.alias}}</strong></td>
           <td><code>{{t.ip}}</code></td>
           <td><span class="group-tag">{{t.group}}</span></td>
+          {% if mode == 'dc' %}
+          <td><span class="group-tag" style="background:#e8f0fe;color:#1a73e8">{{t.branch_name or t.group}}</span></td>
+          {% endif %}
           <td>
+            {% if mode == 'dc' %}
+            {% if t.online %}
+            <span class="badge online">在线</span>
+            {% else %}
+            <span class="badge offline">离线</span>
+            {% endif %}
+            {% else %}
             <div class="health-wrap">
               <div class="health-bar">
                 <div class="health-track">
@@ -770,6 +785,7 @@
                 {% endif %}
               </div>
             </div>
+            {% endif %}
           </td>
           <td id="cv-{{t.ip}}">{{cv or '-'}}</td>
           <td class="actions">
@@ -1199,6 +1215,16 @@
         tips[i].classList.remove('open');
       }
     });
+
+    // ── DC 模式：隐藏不支持的按钮 ──
+    {% if mode == 'dc' %}
+    (function () {
+      var addBtn = document.getElementById('btn-add-terminal');
+      var scanBtn = document.getElementById('btn-scan-subnet');
+      if (addBtn) addBtn.style.display = 'none';
+      if (scanBtn) scanBtn.style.display = 'none';
+    })();
+    {% endif %}
   </script>
 </body>
 

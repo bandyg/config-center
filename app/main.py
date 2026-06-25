@@ -641,10 +641,31 @@ async def index(request: Request, page: int = 1, page_size: int = 20, accessor: 
 @app.get("/terminal/{ip}", response_class=HTMLResponse)
 async def terminal_detail(request: Request, ip: str, port: int = 8081, accessor: TerminalAccessor = Depends(get_accessor)):
     """终端详情页"""
-    terminals_list = load_terminals()
-    t = next((t for t in terminals_list if t.ip == ip), None)
-    if not t:
-        return HTMLResponse("Terminal not found", status_code=404)
+    mode = get_mode()
+    branch_info = {}
+
+    if mode == "dc" and _bc_registry is not None:
+        # DC 模式：从 BcRegistry 查找终端信息
+        all_terms = _bc_registry.get_terminals()
+        t_dict = next((t for t in all_terms if t["ip"] == ip), None)
+        if not t_dict:
+            return HTMLResponse("Terminal not found", status_code=404)
+        branch_info = {
+            "branch_name": t_dict.get("branch_name", ""),
+            "branch_id": t_dict.get("branch_id", ""),
+        }
+        terminal_ctx = {
+            "ip": t_dict["ip"],
+            "alias": t_dict.get("alias", t_dict["ip"]),
+            "group": t_dict.get("group", t_dict.get("branch_name", "")),
+            "port": t_dict.get("port", 8081),
+        }
+    else:
+        terminals_list = load_terminals()
+        t = next((t for t in terminals_list if t.ip == ip), None)
+        if not t:
+            return HTMLResponse("Terminal not found", status_code=404)
+        terminal_ctx = asdict(t)
 
     online = await accessor.check_online(ip, port)
     configs = {}
@@ -653,31 +674,44 @@ async def terminal_detail(request: Request, ip: str, port: int = 8081, accessor:
 
     return templates.TemplateResponse(
         request, "terminal.html",
-        {"terminal": asdict(t), "online": online, "configs": configs},
+        {"terminal": terminal_ctx, "online": online, "configs": configs,
+         "mode": mode, "branch_info": branch_info},
     )
 
 
 @app.get("/batch", response_class=HTMLResponse)
 async def batch_page(request: Request):
     """批量操作页面"""
-    terminals_raw = load_terminals()
-    groups = get_terminal_groups(terminals_raw)
+    mode = get_mode()
+    if mode == "dc" and _bc_registry is not None:
+        terminals_list = _bc_registry.get_terminals()
+        groups = sorted(set(t.get("branch_name", t.get("group", "")) for t in terminals_list))
+    else:
+        terminals_raw = load_terminals()
+        terminals_list = [asdict(t) for t in terminals_raw]
+        groups = get_terminal_groups(terminals_raw)
     return templates.TemplateResponse(
         request, "batch.html",
-        {"terminals": [asdict(t) for t in terminals_raw], "groups": groups},
+        {"terminals": terminals_list, "groups": groups, "mode": mode},
     )
 
 
 @app.get("/compare", response_class=HTMLResponse)
 async def compare_page(request: Request):
     """配置对比页面"""
-    terminals_raw = load_terminals()
-    terminals_with_alias = {t.ip: t.alias for t in terminals_raw}
+    mode = get_mode()
+    if mode == "dc" and _bc_registry is not None:
+        terminals_list = _bc_registry.get_terminals()
+    else:
+        terminals_raw = load_terminals()
+        terminals_list = [asdict(t) for t in terminals_raw]
+    terminals_with_alias = {t["ip"]: t.get("alias", t["ip"]) for t in terminals_list}
     return templates.TemplateResponse(
         request, "compare.html",
         {
-            "terminals": [asdict(t) for t in terminals_raw],
+            "terminals": terminals_list,
             "terminals_with_alias": terminals_with_alias,
+            "mode": mode,
         },
     )
 

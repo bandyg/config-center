@@ -349,11 +349,11 @@
     <div class="card">
       <h3>🎯 选择对比终端</h3>
       <div class="terminal-checkboxes">
-        {% for ip, alias in terminals_with_alias.items() %}
+        {% for t in terminals %}
         <label>
-          <input type="checkbox" class="term-cb" value="{{ip}}" onclick="event.stopPropagation()"
+          <input type="checkbox" class="term-cb" value="{{t.ip}}" onclick="event.stopPropagation()"
             onchange="updateCompareBtn()">
-          {{alias}} <code style="font-size:12px;color:#888">({{ip}})</code>
+          {{t.alias}} <code style="font-size:12px;color:#888">({{t.ip}}){% if mode == 'dc' and t.branch_name %} — {{t.branch_name}}{% endif %}</code>
         </label>
         {% endfor %}
       </div>

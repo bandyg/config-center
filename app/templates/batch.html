@@ -449,12 +449,14 @@
       </div>
       <div class="term-list" id="terminal-list">
         {% for t in terminals %}
-        <div class="term-item" data-ip="{{t.ip}}" data-group="{{t.group}}">
-          <input type="checkbox" class="terminal-cb" value="{{t.ip}}" data-group="{{t.group}}" id="cb-{{t.ip}}"
+        <div class="term-item" data-ip="{{t.ip}}" data-group="{{t.branch_name or t.group}}">
+          <input type="checkbox" class="terminal-cb" value="{{t.ip}}" data-group="{{t.branch_name or t.group}}" id="cb-{{t.ip}}"
             onclick="event.stopPropagation()" onchange="updateSummary()">
           <label for="cb-{{t.ip}}"
             style="font-weight:normal;font-size:13px;margin:0;cursor:pointer;flex:1;display:flex;justify-content:space-between">
-            <span>{{t.alias}} <code style="font-size:12px;color:#888">({{t.ip}})</code></span>
+            <span>{{t.alias}} <code style="font-size:12px;color:#888">({{t.ip}})
+            {% if mode == 'dc' and t.branch_name %} — {{t.branch_name}}{% endif %}
+            </code></span>
             <span class="badge online" id="status-badge-{{t.ip}}" style="display:none">在线</span>
             <span class="badge offline" id="status-offline-{{t.ip}}" style="display:none">离线</span>
             <span class="badge offline" id="status-loading-{{t.ip}}">检测中...</span>

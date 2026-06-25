@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{terminal.alias}} — 配置详情</title>
+  <title>{% if mode == 'dc' and branch_info.branch_name %}{{branch_info.branch_name}} — {% endif %}{{terminal.alias}} — 配置详情</title>
   <!-- CodeMirror 5 (local offline) -->
   <link rel="stylesheet" href="/static/codemirror/codemirror.min.css">
   <link rel="stylesheet" href="/static/codemirror/foldgutter.css">
