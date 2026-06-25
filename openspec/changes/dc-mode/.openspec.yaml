@@ -1,0 +1,5 @@
+schema: spec-driven
+name: dc-mode
+created: 2026-06-25
+status: draft
+description: DC Mode — 同一份 Kiosk Config Center 代码支持 BC（分行）和 DC（总行）两种部署模式，DC 通过代理 BC 管理全行 ~3000 台终端
