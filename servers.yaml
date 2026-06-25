@@ -1,13 +1,22 @@
 # Kiosk Config Center — DC 模式配置
 # 此文件仅在 KIOSK_MODE=dc 时使用
+#
+# url 填写 BC Server 的 DC 侧网卡 IP（DC 局域网可达的地址）
+# BC Server 本身通过另一张网卡连接 terminal 网段，DC 不需要关心
+
 mode: dc
 branches:
+  # ── 请根据实际网络配置修改以下内容 ──
   - id: sz
     name: 深圳分行
     url: http://10.66.1.100:8300
+
   - id: bj
     name: 北京分行
     url: http://10.66.2.100:8300
+
   - id: sh
     name: 上海分行
     url: http://10.66.3.100:8300
+
+  # ... 依次添加所有分行（约 100 台 BC Server）
