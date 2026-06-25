@@ -63,13 +63,13 @@
 
 > **目标**：`run.py` / `main.py` 支持模式切换
 
-- [ ] **T4.1** 修改 `run.py`，增加模式检测
+- [x] **T4.1** 修改 `run.py`，增加模式检测
   ```python
   mode = os.getenv("KIOSK_MODE", "bc")
   if mode == "dc":
       os.environ["KIOSK_CONFIG_MODE"] = "dc"
   ```
-- [ ] **T4.2** 修改 `app/main.py`，按模式初始化
+- [x] **T4.2** 修改 `app/main.py`，按模式初始化
   ```python
   _accessor: TerminalAccessor = None
   _bc_registry: BcRegistry = None
@@ -88,16 +88,16 @@
   def get_accessor() -> TerminalAccessor:
       return _accessor
   ```
-- [ ] **T4.3** DC 模式首页 SSR 改造（`GET /` 路由）
+- [x] **T4.3** DC 模式首页 SSR 改造（`GET /` 路由）
   - DC 模式：首页只渲染 BC 聚合缓存数据，不做终端在线检测
   - BC 模式：保持现有 SSR 全量检测逻辑
-- [ ] **T4.4** DC 模式 API 路由改造
+- [x] **T4.4** DC 模式 API 路由改造
   - `/api/proxy/{ip}/config/{key}` → 忽略 `port` 参数，通过 accessor 处理
   - `/api/batch` → DC 模式按 BC 分组后调用各 BC 的 `/api/batch`
   - `/api/terminals/add` → DC 模式返回 405
   - `/api/terminals/scan` → DC 模式返回 405
   - `/api/history/{ip}/{key}` / `/api/rollback/{ip}/{key}` → 转发到 BC
-- [ ] **T4.5** 验证：分别以 BC 和 DC 模式启动，确认 API 行为符合预期
+- [x] **T4.5** 验证：分别以 BC 和 DC 模式启动，确认 API 行为符合预期
 
 ## Phase 5: 前端模板适配
 
