@@ -4,18 +4,18 @@
 
 > **目标**：抽取出 `TerminalAccessor` 接口和 `DirectAccessor` 实现，BC 模式行为完全不变
 
-- [ ] **T1.1** 新建 `app/accessor.py`，定义 `TerminalAccessor` 抽象基类
+- [x] **T1.1** 新建 `app/accessor.py`，定义 `TerminalAccessor` 抽象基类
   - 4 个抽象方法：`check_online()`, `fetch_config()`, `fetch_all_configs()`, `write_config()`
-- [ ] **T1.2** 实现 `DirectAccessor` 类
+- [x] **T1.2** 实现 `DirectAccessor` 类
   - 将 `app/proxy.py` 中的 4 个函数逻辑平移进来
   - 保持 HTTP 超时、重试逻辑不变
-- [ ] **T1.3** 修改 `app/proxy.py`，保留兼容导入
+- [x] **T1.3** 修改 `app/proxy.py`，保留兼容导入
   - `from app.accessor import DirectAccessor`
   - 原有函数改为调用 `DirectAccessor` 实例，保持对外 API 不变
-- [ ] **T1.4** 修改 `app/main.py`，通过依赖注入使用 accessor
+- [x] **T1.4** 修改 `app/main.py`，通过依赖注入使用 accessor
   - 创建 `get_accessor()` 依赖函数（目前始终返回 `DirectAccessor`）
   - 所有路由 handler 改为 `accessor: TerminalAccessor = Depends(get_accessor)`
-- [ ] **T1.5** 验证：启动 BC 模式，所有页面和 API 功能正常
+- [x] **T1.5** 验证：启动 BC 模式，所有页面和 API 功能正常
 
 ## Phase 2: DC 模式配置与 BcRegistry
 
