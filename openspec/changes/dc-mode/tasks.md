@@ -21,7 +21,7 @@
 
 > **目标**：实现 DC 模式的配置体系和 BC Server 注册表
 
-- [ ] **T2.1** 新建 `servers.yaml` 示例文件
+- [x] **T2.1** 新建 `servers.yaml` 示例文件
   ```yaml
   mode: dc
   branches:
@@ -29,19 +29,19 @@
       name: 深圳分行
       url: http://100.66.1.100:8300
   ```
-- [ ] **T2.2** 新建 `app/bc_registry.py`，定义 `BcServer` 数据类
+- [x] **T2.2** 新建 `app/bc_registry.py`，定义 `BcServer` 数据类
   - 字段：`id`, `name`, `url`, `terminals`（缓存列表）, `online`（BC 自身在线状态）
-- [ ] **T2.3** 实现 `BcRegistry` 类
+- [x] **T2.3** 实现 `BcRegistry` 类
   - 构造函数：从 `servers.yaml` 加载 BC 列表
   - `refresh_all()`：`asyncio.Semaphore(20)` 并行请求所有 BC 的 `/api/terminals`
   - 构建 `{ip: BcServer}` 映射表
   - 聚合时给每条 terminal 加上 `branch_id`, `branch_name`, `bc_url`
   - 对失败的 BC 标记 `online=False`，已缓存数据保留
-- [ ] **T2.4** 实现缓存刷新策略
+- [x] **T2.4** 实现缓存刷新策略
   - 缓存有效期 30s
   - 后台 `asyncio.Task` 定时刷新
   - `url_for(ip)` 查询方法
-- [ ] **T2.5** 验证：本地模拟 BC 端点，测试聚合逻辑正确性
+- [x] **T2.5** 验证：本地模拟 BC 端点，测试聚合逻辑正确性
 
 ## Phase 3: BcProxyAccessor 实现
 
