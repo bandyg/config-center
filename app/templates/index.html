@@ -979,7 +979,7 @@
             group: document.getElementById('add-group').value.trim(),
             port: parseInt(document.getElementById('add-port').value) || 8081,
           }),
-        });
+        }));
         const data = await r.json();
         if (data.status === 'ok') {
           msg.className = 'modal-msg success';
@@ -1052,7 +1052,7 @@
             cidr: document.getElementById('scan-cidr').value.trim(),
             port: parseInt(document.getElementById('scan-port').value) || 8081,
           }),
-        });
+        }));
         const data = await r.json();
         if (data.status !== 'ok') {
           msg.className = 'modal-msg error';
@@ -1132,7 +1132,7 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ hosts: p.found || [] }),
-        });
+        }));
         const data = await r.json();
         if (data.status === 'ok') {
           msg.className = 'modal-msg success';
